@@ -128,8 +128,8 @@ const pOctopus = scenePipe(mAnim, 'vsJelly', 'fsOctopus', [vbSolid, ibAnim]);
 const pKraken = scenePipe(mAnim, 'vsJelly', 'fsKraken', [vbSolid, ibAnim]);
 const pEel = scenePipe(mAnim, 'vsWorm', 'fsEel', [vbSolid, ibAnim]);
 const pSerpent = scenePipe(mAnim, 'vsWorm', 'fsSerpent', [vbSolid, ibAnim]);
-const pAngler = scenePipe(mAnim, 'vsFish', 'fsAngler', [vbSolid, ibAnim]); // v2.7: anglerfish
-const pPlesio = scenePipe(mAnim, 'vsWorm', 'fsPlesio', [vbSolid, ibAnim]); // v2.7: plesiosaurus
+const pLure = scenePipe(mAnim, 'vsFish', 'fsLure', [vbSolid, ibAnim]); // v2.8: anglerfish (procedural)
+const pLongneck = scenePipe(mAnim, 'vsWorm', 'fsLongneck', [vbSolid, ibAnim]); // v2.8: plesiosaurus (procedural)
 // player fish: its own module and layout (G uniform + player uniform), reusing the fish mesh
 const bglPlayer = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, buffer: {} }] });
 const plPlayer = device.createPipelineLayout({ bindGroupLayouts: [bglPlayer] });
@@ -323,8 +323,8 @@ meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().bui
 meshes.push(meshTower().build(), meshColumn().build(), meshDome().build(), meshGate().build(), meshCrystal().build(), meshStatue().build(), meshPlaza().build(), meshRune().build(), meshConduit().build(), meshArc().build());
 // Ocean City creatures (v2.0): ids 38-41 (turtle, shark, whale, mermaid)
 meshes.push(meshTurtle().build(), meshShark().build(), meshWhale().build(), meshMermaid().build());
-// Ocean City v2.7: ids 42-43 (anglerfish, plesiosaurus - real low-poly models, Gobkit CC0)
-meshes.push(meshAngler().build(), meshPlesio().build());
+// Ocean City v2.8: ids 42-43 (anglerfish, plesiosaurus - procedural, rebuilt from the game's own helpers)
+meshes.push(meshLure().build(), meshLongneck().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
 const allV = new Uint8Array(nV * 16), allI = new Uint32Array(nI);
@@ -337,13 +337,13 @@ const ibSolids = buf(solidData, BU.VERTEX);
 const ibChunk = Wd.chunks.map((c) => buf(c.data, BU.VERTEX)), ibProp = Wd.props.map((c) => buf(c.data, BU.VERTEX));
 const ibBig = buf(new Uint8Array(Wd.big.buf), BU.VERTEX), ibBigF = buf(new Uint8Array(Wd.bigF.buf), BU.VERTEX), ibSmall = buf(new Uint8Array(Wd.small.buf), BU.VERTEX);
 const ibFish = buf(Wd.fish, BU.VERTEX), ibManta = buf(Wd.mantas, BU.VERTEX), ibJelly = buf(Wd.jelly, BU.VERTEX), ibWorm = buf(Wd.worm, BU.VERTEX), ibBubbles = buf(Wd.bubbles, BU.VERTEX), ibSnowB = buf(Wd.snow, BU.VERTEX);
-const ibShark = buf(Wd.shark, BU.VERTEX), ibWhale = buf(Wd.whale, BU.VERTEX), ibTurtle = buf(Wd.turtle, BU.VERTEX), ibMermaid = buf(Wd.mermaid, BU.VERTEX), ibRay = buf(Wd.ray, BU.VERTEX), ibOctopus = buf(Wd.octopus, BU.VERTEX), ibKraken = buf(Wd.kraken, BU.VERTEX), ibEel = buf(Wd.eel, BU.VERTEX), ibSerpent = buf(Wd.serpent, BU.VERTEX), ibAngler = buf(Wd.angler, BU.VERTEX), ibPlesio = buf(Wd.plesio, BU.VERTEX);
+const ibShark = buf(Wd.shark, BU.VERTEX), ibWhale = buf(Wd.whale, BU.VERTEX), ibTurtle = buf(Wd.turtle, BU.VERTEX), ibMermaid = buf(Wd.mermaid, BU.VERTEX), ibRay = buf(Wd.ray, BU.VERTEX), ibOctopus = buf(Wd.octopus, BU.VERTEX), ibKraken = buf(Wd.kraken, BU.VERTEX), ibEel = buf(Wd.eel, BU.VERTEX), ibSerpent = buf(Wd.serpent, BU.VERTEX), ibLure = buf(Wd.lure, BU.VERTEX), ibLongneck = buf(Wd.longneck, BU.VERTEX);
 const ibGl = buf(Wd.glints, BU.VERTEX), nGl = Wd.glints.length / 8;
 const nFish = Wd.fish.length / 8, nManta = Wd.mantas.length / 8, nJelly = Wd.jelly.length / 8, nWorm = Wd.worm.length / 8, nBub = Wd.bubbles.length / 8, nSnow = Wd.snow.length / 4;
-const nShark = Wd.shark.length / 8, nWhale = Wd.whale.length / 8, nTurtle = Wd.turtle.length / 8, nMermaid = Wd.mermaid.length / 8, nRay = Wd.ray.length / 8, nOctopus = Wd.octopus.length / 8, nKraken = Wd.kraken.length / 8, nEel = Wd.eel.length / 8, nSerpent = Wd.serpent.length / 8, nAngler = Wd.angler.length / 8, nPlesio = Wd.plesio.length / 8;
+const nShark = Wd.shark.length / 8, nWhale = Wd.whale.length / 8, nTurtle = Wd.turtle.length / 8, nMermaid = Wd.mermaid.length / 8, nRay = Wd.ray.length / 8, nOctopus = Wd.octopus.length / 8, nKraken = Wd.kraken.length / 8, nEel = Wd.eel.length / 8, nSerpent = Wd.serpent.length / 8, nLure = Wd.lure.length / 8, nLongneck = Wd.longneck.length / 8;
 const MANTA = meshes[12], FISH = meshes[13], JELLY = meshes[26], WORM = meshes[27];
 const TURTLE = meshes[38], SHARK = meshes[39], WHALE = meshes[40], MERMAID = meshes[41];
-const ANGLER = meshes[42], PLESIO = meshes[43];
+const LURE = meshes[42], LONGNECK = meshes[43];
 Q.writeTexture({ texture: tVol }, Wd.volD, { bytesPerRow: NX, rowsPerImage: NY / 2 }, [NX / 2, NY / 2, NZ / 2]);
 Q.writeTexture({ texture: tMap }, Wd.gm, { bytesPerRow: 2048 }, [512, 512]);
 
@@ -438,7 +438,7 @@ if (hasTS) {
 // ---------------------------------------------------------------- frame
 let hud = false, third = false, eye = false; // god mode only: the camera flies free, no fish; the 1-6 keys jump to viewpoints
 // (no V toggle: god mode is the only view; the 1-6 keys jump to viewpoints)
-let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
+let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
 const TANH = 0.6, NEAR = 0.1, EXPO = 0.74, RAYS = 0.70;
 const submitList = [null];
 const rowOrd = new Uint8Array(CELLS);
@@ -533,8 +533,8 @@ function render() {
   r.setPipeline(pKraken); r.setVertexBuffer(1, ibKraken); r.drawIndexed(JELLY.ib.length, nKraken, JELLY.i0, JELLY.v0, 0);
   r.setPipeline(pEel); r.setVertexBuffer(1, ibEel); r.drawIndexed(WORM.ib.length, nEel, WORM.i0, WORM.v0, 0);
   r.setPipeline(pSerpent); r.setVertexBuffer(1, ibSerpent); r.drawIndexed(WORM.ib.length, nSerpent, WORM.i0, WORM.v0, 0);
-  r.setPipeline(pAngler); r.setVertexBuffer(1, ibAngler); r.drawIndexed(ANGLER.ib.length, nAngler, ANGLER.i0, ANGLER.v0, 0); // v2.7
-  r.setPipeline(pPlesio); r.setVertexBuffer(1, ibPlesio); r.drawIndexed(PLESIO.ib.length, nPlesio, PLESIO.i0, PLESIO.v0, 0); // v2.7
+  r.setPipeline(pLure); r.setVertexBuffer(1, ibLure); r.drawIndexed(LURE.ib.length, nLure, LURE.i0, LURE.v0, 0); // v2.8
+  r.setPipeline(pLongneck); r.setVertexBuffer(1, ibLongneck); r.drawIndexed(LONGNECK.ib.length, nLongneck, LONGNECK.i0, LONGNECK.v0, 0); // v2.8
   // (no player fish in god mode: the camera is the player, nothing to draw here)
   r.setBindGroup(0, bg0); // put the scene group back for the kelp on down
   // kelp and plants: 9-row blades up close, 5 rows mid-range, a decimated set far away
@@ -670,7 +670,7 @@ const checkPOIs = (dt) => {
   for (let i = 0; i < nWhale; i++) { if (Wd.whale[i * 8 + 4] >= 0.75) continue; const o = i * 8; const dx = px - Wd.whale[o], dz = pz - Wd.whale[o + 2]; if (abs(sqrt(dx * dx + dz * dz) - Wd.whale[o + 3]) < 15 && abs(py - Wd.whale[o + 1]) < 12) unlock('whale', 'Achievement: spotted the whale'); }
   if (d3(70, -26, 20) < 8) unlock('gatepass', 'Achievement: swam through the Energy Gate');
   const near = (arr, i) => { const o = i * 8; const dx = px - arr[o], dz = pz - arr[o + 2]; return sqrt(dx * dx + dz * dz) < arr[o + 3] + 25 && abs(py - arr[o + 1]) < 20; };
-  if (near(Wd.whale, 2) || near(Wd.whale, 3) || near(Wd.whale, 4) || near(Wd.whale, 5) || near(Wd.serpent, 0) || near(Wd.serpent, 1) || near(Wd.serpent, 2) || near(Wd.kraken, 0) || near(Wd.kraken, 1) || near(Wd.kraken, 2) || near(Wd.angler, 0) || near(Wd.angler, 1) || near(Wd.angler, 2) || near(Wd.plesio, 0) || near(Wd.plesio, 1)) unlock('monster', 'Achievement: swam near a giant monster');
+  if (near(Wd.whale, 2) || near(Wd.whale, 3) || near(Wd.whale, 4) || near(Wd.whale, 5) || near(Wd.serpent, 0) || near(Wd.serpent, 1) || near(Wd.serpent, 2) || near(Wd.kraken, 0) || near(Wd.kraken, 1) || near(Wd.kraken, 2) || near(Wd.lure, 0) || near(Wd.lure, 1) || near(Wd.lure, 2) || near(Wd.longneck, 0) || near(Wd.longneck, 1)) unlock('monster', 'Achievement: swam near a giant monster');
   if (poiIds.every((id) => achSet.has(id))) unlock('all', 'Achievement: found every place');
 };
 
@@ -705,12 +705,14 @@ function frame(now) {
     if (abs(pix - pixLast) / pixLast > 0.15 || abs(det - detLast) > 0.05) { pixLast = pix; detLast = det; resize(); }
   }
   // Auto detail (starts at High): once the dynamic resolution is already at its floor and the game still runs
-  // slow for a while, drop a level and reload, keeping the fish where it was. Only while actually playing.
+  // slow for a while, drop a level and reload, keeping the camera where it was. Only while actually playing.
+  // The saved position is the CAMERA: in god mode the fish position is stale (the fish never moves), so
+  // saving it would teleport the player back to the spawn after the reload.
   if (AUTO && LV < 2 && !menu && F[TIME] > 15) {
     autoT += dtr; autoN++; autoSum += dtr;
     if (autoT > 6000) {
       if (autoSum / autoN > 24 && pix <= PIXMIN && det <= DETMIN) {
-        keep('abyssalPos', [F[PX], F[PY], F[PZ], F[PYAW], F[PPIT]].join(','));
+        keep('abyssalPos', [F[CX], F[CY], F[CZ], F[YAW], F[PIT]].join(','));
         keep('abyssal', [LV + 1, '', '']); // drop a level; pixels and draw distance start fresh
         location.reload();
       }
@@ -725,11 +727,10 @@ function frame(now) {
       jx = jx > 1 ? 1 : jx < -1 ? -1 : jx; jy = jy > 1 ? 1 : jy < -1 ? -1 : jy;
       lkx += jx * 1.5 * dt; lky += jy * dt;
     }
-    // mouse look through two cascaded low-pass stages
-    const kq = 1 - exp(-dt * 30); lkx += mdx * 0.0022; lky += mdy * 0.0035; mdx = 0; mdy = 0; // the mouse pitches up/down harder than it yaws, so a flick up lifts the fish
-    const ax = lkx * kq, ay = lky * kq; lkx -= ax; lky -= ay; l2x += ax; l2y += ay;
-    const dyw = l2x * kq, dpt = l2y * kq; l2x -= dyw; l2y -= dpt;
-    const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 4.5), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd;
+    // mouse look through a single fast low-pass stage (was two cascaded stages at 30/s: too much lag, the view felt like it was dragging behind the mouse)
+    const kq = 1 - exp(-dt * 60); lkx += mdx * 0.0022; lky += mdy * 0.0035; mdx = 0; mdy = 0; // the mouse pitches up/down harder than it yaws, so a flick up lifts the view
+    const dyw = lkx * kq, dpt = lky * kq; lkx -= dyw; lky -= dpt;
+    const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 12), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd; // velocity reaches its target fast (was 4.5/s, ~222 ms lag, the camera felt like it was swimming through syrup)
     // god mode: the camera flies free, 360 degrees, no fish. WASD moves where it looks, mouse steers,
     // Space/E rise, Q dives, Shift is faster; the rock-collision stepper keeps it out of rock
     const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
@@ -849,13 +850,14 @@ F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0; F[PWAG] = 0;
   PL[4] = F[PYAW]; PL[5] = F[PPIT]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
   Q.writeBuffer(uboPlayer, 0, PL);
 }
-// after an auto detail drop the page reloads: put the fish back where it was instead of the start viewpoint
+// after an auto detail drop the page reloads: put the camera back where it was instead of the start viewpoint
 let savedPos = null;
 try { savedPos = localStorage.abyssalPos; } catch {}
 if (savedPos) {
   const a = savedPos.split(',').map(Number);
   if (a.length === 5 && a.every(Number.isFinite)) {
-    F[PX] = a[0]; F[PY] = a[1]; F[PZ] = a[2]; F[PYAW] = a[3]; F[PPIT] = a[4]; F[PROLL] = 0;
+    F[CX] = a[0]; F[CY] = a[1]; F[CZ] = a[2]; F[YAW] = a[3]; F[PIT] = a[4]; F[VX] = F[VY] = F[VZ] = 0;
+    F[PX] = a[0]; F[PY] = a[1]; F[PZ] = a[2]; F[PYAW] = a[3]; F[PPIT] = a[4]; F[PROLL] = 0; // keep the fish slot in sync so nothing reads a stale position
     PL[0] = a[0]; PL[1] = a[1]; PL[2] = a[2]; PL[3] = 1.6; PL[4] = a[3]; PL[5] = a[4]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
     Q.writeBuffer(uboPlayer, 0, PL);
   }

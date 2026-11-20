@@ -822,33 +822,39 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   c += vec3f(1., .2, .05) * eye * 3.;
   return fin(fog(c, i.wp, z));
 }
-// v2.7 anglerfish (vsFish, meshAngler - Gobkit CC0): near-black abyssal body, pale belly, a glowing lure
-// on top of the head (op.x > .1, op.y > .24) and two glowing eyes on the sides of the head
-@fragment fn fsAngler(i: VO) -> @location(0) vec4f {
+// v2.8 anglerfish (vsFish, meshLure - procedural): near-black abyssal body, pale belly, a glowing lure
+// bulb on top of the head (op.x .49-.62, op.y .37-.48), a dark maw under the head front, and two
+// glowing eyes on the sides of the head (op.x .3-.44, op.y .05-.18, |op.z| .1-.24)
+@fragment fn fsLure(i: VO) -> @location(0) vec4f {
   let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
   let z = zone(i.wp); let vv = vol(i.wp);
   var alb = mix(vec3f(.05, .06, .10), vec3f(.35, .38, .42), ss(.05, -.25, i.op.y));
+  let maw = step(.28, i.op.x) * ss(-.06, -.1, i.op.y) * (1. - ss(.18, .24, abs(i.op.z)));
+  alb *= 1. - maw * .75;
   let E = sunE(i.wp.y, z) * i.lt;
   var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
   c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.2 + vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25 * vv.g;
-  let lure = ss(.05, .15, i.op.x) * ss(.22, .27, i.op.y);
+  let lure = ss(.49, .53, i.op.x) * (1. - ss(.58, .62, i.op.x)) * ss(.37, .41, i.op.y) * (1. - ss(.45, .48, i.op.y));
   c += vec3f(1., .75, .25) * lure * (2. + .8 * sin(g.cam.w * 3. + i.sd * 30.));
-  let eye = ss(.38, .44, i.op.x) * ss(.08, .14, i.op.y) * ss(.15, .22, abs(i.op.z)) * (1. - ss(.30, .36, abs(i.op.z)));
+  let stalk = ss(.4, .46, i.op.x) * ss(.28, .32, i.op.y) * .4;
+  c += vec3f(1., .75, .25) * stalk;
+  let eye = ss(.28, .32, i.op.x) * (1. - ss(.42, .46, i.op.x)) * ss(.02, .06, i.op.y) * (1. - ss(.16, .2, i.op.y)) * ss(.08, .12, abs(i.op.z)) * (1. - ss(.2, .24, abs(i.op.z)));
   c += vec3f(.4, 1., .6) * eye * 2.5;
   return fin(fog(c, i.wp, z));
 }
-// v2.7 plesiosaurus (vsWorm, meshPlesio - Gobkit CC0): a long-necked sea serpent, dark teal with a pale
-// belly, a glowing dorsal stripe and burning eyes on the head (op.x > 2.5, op.y .55-1.0)
-@fragment fn fsPlesio(i: VO) -> @location(0) vec4f {
+// v2.8 plesiosaurus (vsWorm, meshLongneck - procedural): a long-necked sea serpent, dark teal with a
+// pale belly, a glowing dorsal stripe along the top of the body and neck (op.y .3-.45) and burning
+// eyes on the head (op.x 2.5-2.85, op.y .55-.78, |op.z| .08-.24)
+@fragment fn fsLongneck(i: VO) -> @location(0) vec4f {
   let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
   let z = zone(i.wp); let vv = vol(i.wp);
   var alb = mix(vec3f(.04, .14, .11), vec3f(.55, .6, .5), ss(.1, -.6, i.op.y));
   let E = sunE(i.wp.y, z);
   var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.1);
   c += E * pow(sat(dot(n, normalize(V + L))), 40.) * 1.2;
-  let strip = ss(.6, .9, i.op.y);
+  let strip = ss(.3, .45, i.op.y);
   c += vec3f(.2, .9, .7) * strip * 1.6;
-  let eye = ss(2.5, 2.7, i.op.x) * ss(.55, .7, i.op.y) * ss(.2, .35, abs(i.op.z)) * (1. - ss(.6, .75, abs(i.op.z)));
+  let eye = ss(2.5, 2.6, i.op.x) * (1. - ss(2.75, 2.85, i.op.x)) * ss(.5, .58, i.op.y) * (1. - ss(.7, .78, i.op.y)) * ss(.06, .1, abs(i.op.z)) * (1. - ss(.18, .24, abs(i.op.z)));
   c += vec3f(1., .25, .05) * eye * 3.;
   return fin(fog(c, i.wp, z));
 }
