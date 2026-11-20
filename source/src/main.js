@@ -412,6 +412,16 @@ if (hasTS) {
 let hud = false, third = true; // third: swim as the gold fish; false: the original free camera
 // V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
 // just ahead of the camera with the camera heading, so the camera can pull back behind it.
+// third-person camera: how far behind the fish, how high above it, how far ahead it looks
+const CAMD = 4.6, CAMH = 1.1, CAML = 2;
+// put the camera at its third-person spot at once: behind the fish and a little above, looking ahead of it.
+// Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
+const snapCam = () => {
+  const cp = cos(F[PPIT]), sy = sin(F[PYAW]), cw = cos(F[PYAW]), sp = sin(F[PPIT]);
+  F[CX] = F[PX] - sy * cp * CAMD; F[CY] = F[PY] - sp * CAMD + CAMH; F[CZ] = F[PZ] + cw * cp * CAMD;
+  const lx = sy * cp * (CAMD + CAML), ly = sp * (CAMD + CAML) - CAMH, lz = -cw * cp * (CAMD + CAML);
+  F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
+};
 function toggleView() {
   third = !third;
   F[VX] = F[VY] = F[VZ] = 0;
@@ -419,6 +429,7 @@ function toggleView() {
     const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
     F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
     F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0;
+    snapCam();
   }
 }
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
@@ -640,10 +651,10 @@ function frame(now) {
       F[PWAG] += dt * (4 + spd * 1.1);
       // camera follows behind the fish with lag, looking a little ahead of it
       const kc = 1 - exp(-dt * 5);
-      F[CX] += (px - tx * 4.6 - F[CX]) * kc;
-      F[CY] += (py - ty * 4.6 + 1.1 - F[CY]) * kc;
-      F[CZ] += (pz - tz * 4.6 - F[CZ]) * kc;
-      const lx = px + tx * 2 - F[CX], ly = py + ty * 2 - F[CY], lz = pz + tz * 2 - F[CZ];
+      F[CX] += (px - tx * CAMD - F[CX]) * kc;
+      F[CY] += (py - ty * CAMD + CAMH - F[CY]) * kc;
+      F[CZ] += (pz - tz * CAMD - F[CZ]) * kc;
+      const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
       F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
       // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
       PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
@@ -674,7 +685,7 @@ function frame(now) {
 const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
-    case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
+    case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'Space': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
@@ -684,14 +695,19 @@ const key = (e, v) => {
     }
   }
 };
-// behind the menu only the stats and mute keys work
-addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
+// behind the menu only the stats and mute keys work; P pauses and resumes from anywhere
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyP' && !e.repeat) { sound(); if (menu) go(); else ui(true); return; }
+  if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return;
+  if (e.code === 'Space') e.preventDefault(); // Space dives: stop the page scroll and the button press
+  sound(); key(e, 1);
+});
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = 0; tId = -1; tN = 0; };
 // Pointer lock, made to survive the browser's own behaviour: after Esc exits the lock Chrome refuses a fresh
 // request for about 1.25 s, so a failed request is retried after the cooldown instead of leaving the game in a
 // half-open state (menu hidden, mouse free). The menu only hides once the lock actually lands.
-let lockTries = 0, lockRetryT = 0, lockGraceT = 0;
+let lockTries = 0, lockRetryT = 0;
 const capture = () => {
   sound();
   const p = canvas.requestPointerLock({ unadjustedMovement: true });
@@ -728,6 +744,7 @@ const ui = (m) => {
 };
 const go = () => {
   sound(); bDive.textContent = 'Resume';
+  if (third) snapCam(); // start from the far third-person view, not from where the menu left the camera
   // phones: go fullscreen and ask for landscape; where that is refused the CSS rotation still applies
   if (mob) { ui(false); document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0); }
   else { lockTries = 0; capture(); } // desktop: the menu hides when the lock lands, not before
@@ -737,9 +754,10 @@ bDive.onclick = go; $('o').onclick = () => ui(true);
 $('q').querySelector('span').textContent = AUTO ? 'Detail · Auto' : 'Detail';
 $('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', [2 - i, '', '', '0']); location.reload(); }; }); // a hand-picked level turns auto off
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement) { lockTries = 0; clearTimeout(lockRetryT); clearTimeout(lockGraceT); ui(false); }
-  // a brief loss (focus blip) should not throw the menu back up: only show it if still unlocked shortly after
-  else { clearTimeout(lockGraceT); lockGraceT = setTimeout(() => { if (!document.pointerLockElement) ui(true); }, 400); }
+  if (document.pointerLockElement) { lockTries = 0; clearTimeout(lockRetryT); ui(false); }
+  // losing the mouse never opens the menu on its own: only Esc, P or the corner button does. The corner
+  // button appears (body 'g' without 'p') and a click on the scene locks the mouse again.
+  else body.className = menu ? 'm' : 'g';
 });
 
 // draw the first frame and wait for the GPU to finish it (pipelines get compiled on first use) before the reveal
@@ -753,6 +771,7 @@ F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0; F[PWAG] = 0;
   PL[4] = F[PYAW]; PL[5] = F[PPIT]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
   Q.writeBuffer(uboPlayer, 0, PL);
 }
+snapCam(); // start behind the fish, far: the menu backdrop is the third-person view already
 // after an auto detail drop the page reloads: put the fish back where it was instead of the start viewpoint
 let savedPos = null;
 try { savedPos = localStorage.abyssalPos; } catch {}
@@ -760,10 +779,7 @@ if (savedPos) {
   const a = savedPos.split(',').map(Number);
   if (a.length === 5 && a.every(Number.isFinite)) {
     F[PX] = a[0]; F[PY] = a[1]; F[PZ] = a[2]; F[PYAW] = a[3]; F[PPIT] = a[4]; F[PROLL] = 0;
-    const cp = cos(a[4]), sy = sin(a[3]), cw = cos(a[3]), sp = sin(a[4]);
-    F[CX] = a[0] - sy * cp * 4.6; F[CY] = a[1] - sp * 4.6 + 1.1; F[CZ] = a[2] + cw * cp * 4.6;
-    const lx = sy * cp * 6.6, ly = sp * 6.6 - 1.1, lz = -cw * cp * 6.6;
-    F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
+    snapCam();
     PL[0] = a[0]; PL[1] = a[1]; PL[2] = a[2]; PL[3] = 1.6; PL[4] = a[3]; PL[5] = a[4]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
     Q.writeBuffer(uboPlayer, 0, PL);
   }
