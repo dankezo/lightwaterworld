@@ -646,7 +646,7 @@ function frame(now) {
     if (third) {
       // third-person: the deltas steer the fish heading, the fish banks into turns, the camera trails behind
       F[PYAW] += dyw;
-      let pp = F[PPIT] - dpt; pp = pp < -1.4 ? -1.4 : pp > 1.4 ? 1.4 : pp; F[PPIT] = pp;
+      let pp = F[PPIT] - dpt; pp = pp < -1.55 ? -1.55 : pp > 1.55 ? 1.55 : pp; F[PPIT] = pp; // mouse pitches the fish through the full 180 degrees in front, straight down to straight up
       const turn = dt > 0 ? dyw / dt : 0;
       let rt = -turn * 0.12; rt = rt < -0.6 ? -0.6 : rt > 0.6 ? 0.6 : rt;
       F[PROLL] += (rt - F[PROLL]) * (1 - exp(-dt * 6));
