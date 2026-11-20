@@ -599,7 +599,7 @@ function frame(now) {
       const end = k < 1 ? (det > DETMIN ? mid : PIXMIN) : det < 1 ? mid : top;
       pix *= k; if (k < 1 ? pix < end : pix > end) pix = end;
     } else { det *= sqrt(k); det = det < DETMIN ? DETMIN : det > 1 ? 1 : det; }
-    if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det, AUTO ? '1' : '0']); // nothing kept at full resolution
+    if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
     dynN = dynT = dynG = dynGN = 0; resize();
   }
   // Auto detail (starts at High): once the dynamic resolution is already at its floor and the game still runs
@@ -609,7 +609,7 @@ function frame(now) {
     if (autoT > 6000) {
       if (autoSum / autoN > 24 && pix <= PIXMIN && det <= DETMIN) {
         keep('abyssalPos', [F[PX], F[PY], F[PZ], F[PYAW], F[PPIT]].join(','));
-        keep('abyssal', [LV + 1, '', '', '1']); // drop a level; pixels and draw distance start fresh
+        keep('abyssal', [LV + 1, '', '']); // drop a level; pixels and draw distance start fresh
         location.reload();
       }
       autoT = autoN = autoSum = 0;
@@ -750,9 +750,12 @@ const go = () => {
   else { lockTries = 0; capture(); } // desktop: the menu hides when the lock lands, not before
 };
 bDive.onclick = go; $('o').onclick = () => ui(true);
+// intro: the start screen is a short explanation with one OK button; the full menu is for pausing (Esc / P)
+const bOk = $('ok');
+const showIntro = () => { menu = true; body.className = 'i'; setTimeout(() => menu && bOk.focus(), 100); };
+bOk.onclick = go;
 // detail buttons: the current level is lit, the others reload the page with theirs
-$('q').querySelector('span').textContent = AUTO ? 'Detail · Auto' : 'Detail';
-$('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', [2 - i, '', '', '0']); location.reload(); }; }); // a hand-picked level turns auto off
+$('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', [2 - i, '', '']); location.reload(); }; });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement) { lockTries = 0; clearTimeout(lockRetryT); ui(false); }
   // losing the mouse never opens the menu on its own: only Esc, P or the corner button does. The corner
@@ -788,5 +791,5 @@ if (savedPos) {
 await say('Letting the light in…', 1, 400);
 render(); await Q.onSubmittedWorkDone();
 setTimeout(keep, 15e3, 'abyssalLoad', ''); // the load counts as survived after 15 s of frames
-ui(true);
+showIntro();
 requestAnimationFrame((t) => { F[LAST] = t; requestAnimationFrame(frame); });
