@@ -374,7 +374,7 @@ Wd.glints = Wd.volD = Wd.gm = T.vb = T.ib = T.wp = T.wn = 0;
 // The scene is drawn at `pix` pixels and scaled up to the window. frame() tunes it and the draw distance scale `det`
 // for 60 fps; both start where the last visit left them.
 const PIXMAX = 2560 * 1440, PIXMIN = mob ? 25e4 : 5e5, DETMIN = 0.4;
-let W = 0, H = 0, DW = 0, DH = 0, pix = +SV[1] || (LV > 1 ? 41e4 : mob ? 1280 * 720 : PIXMAX), det = +SV[2] || 1, dynN = 0, dynT = 0, dynG = 0, dynGN = 0, dynBad = 0, dynOk = 0, dynWait = 3;
+let W = 0, H = 0, DW = 0, DH = 0, pix = +SV[1] || (LV > 1 ? 41e4 : mob ? 1280 * 720 : PIXMAX), det = +SV[2] || 1, dynN = 0, dynT = 0, dynG = 0, dynGN = 0, dynBad = 0, dynOk = 0, dynWait = 3, pixLast = pix, detLast = det;
 let passScene, passRays, passBlur, bgBlur, passPost, bgRays, bgPost, bloomPass = [], bloomBG = [], targets = [];
 const NB = 6;
 function resize() {
@@ -435,7 +435,7 @@ let hud = false, third = true, eye = false; // third: swim as the gold fish; fal
 // V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
 // just ahead of the camera with the camera heading, so the camera can pull back behind it.
 // third-person camera: how far behind the fish, how high above it, how far ahead it looks
-const CAMD = 11, CAMH = 3.2, CAML = 2; // the camera sits far back and higher, looking down at the fish
+const CAMD = 18, CAMH = 5, CAML = 2; // the camera sits far back and high, looking down at the fish
 // put the camera at its third-person spot at once: behind the fish and a little above, looking ahead of it.
 // Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
 const snapCam = () => {
@@ -622,7 +622,7 @@ const rockAt = (x, y, z) => { const ox = F[CX], oy = F[CY], oz = F[CZ]; F[CX] = 
 // never fills the screen
 const clearBoom = (px, py, pz, tx, ty, tz) => {
   let b = CAMD;
-  while (b > 4 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 4: the fish is 1.6 long, a shorter boom puts the camera inside it
+  while (b > 6 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 6: the fish is 1.6 long, a shorter boom puts the camera inside it
   return b;
 };
 
@@ -717,7 +717,9 @@ function frame(now) {
       pix *= k; if (k < 1 ? pix < end : pix > end) pix = end;
     } else { det *= sqrt(k); det = det < DETMIN ? DETMIN : det > 1 ? 1 : det; }
     if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
-    dynN = dynT = dynG = dynGN = 0; resize();
+    dynN = dynT = dynG = dynGN = 0;
+    // rebuilding all render targets hitches a frame: only do it when the load moved enough to matter
+    if (abs(pix - pixLast) / pixLast > 0.15 || abs(det - detLast) > 0.05) { pixLast = pix; detLast = det; resize(); }
   }
   // Auto detail (starts at High): once the dynamic resolution is already at its floor and the game still runs
   // slow for a while, drop a level and reload, keeping the fish where it was. Only while actually playing.
@@ -779,7 +781,7 @@ function frame(now) {
         F[CZ] += (pz - tz * b - F[CZ]) * kc;
         if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
           const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
-          const nd = max(4, dl - 2); // never closer than 4 to the fish, even when pulled out of rock
+          const nd = max(6, dl - 2); // never closer than 6 to the fish, even when pulled out of rock
           F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
         }
         const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
