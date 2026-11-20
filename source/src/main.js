@@ -431,33 +431,21 @@ if (hasTS) {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false, third = true, eye = false; // third: swim as the gold fish; false: the original free camera; eye: first person from the fish eye (V)
-// V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
-// just ahead of the camera with the camera heading, so the camera can pull back behind it.
-// third-person camera: how far behind the fish, how high above it, how far ahead it looks
-const CAMD = 18, CAMH = 5, CAML = 2; // the camera sits far back and high, looking down at the fish
-// put the camera at its third-person spot at once: behind the fish and a little above, looking ahead of it.
-// Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
-const snapCam = () => {
-  const cp = cos(F[PPIT]), sy = sin(F[PYAW]), cw = cos(F[PYAW]), sp = sin(F[PPIT]);
-  const tx = sy * cp, ty = sp, tz = -cw * cp, b = clearBoom(F[PX], F[PY], F[PZ], tx, ty, tz);
-  F[CX] = F[PX] - tx * b; F[CY] = F[PY] - ty * b + CAMH; F[CZ] = F[PZ] - tz * b;
-  const lx = tx * (b + CAML), ly = ty * (b + CAML) - CAMH, lz = tz * (b + CAML);
-  F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
-};
+let hud = false, third = true, eye = true; // the only swimming view is the fish eye (first person); false: the original free camera
+// V switches between the fish eye and the free camera. To the eye: put the fish
+// just ahead of the camera with the camera heading, so it swims where it looks.
+// To free camera: keep the current view, stop drifting.
 function toggleView() {
   F[VX] = F[VY] = F[VZ] = 0;
   if (!third) {
-    // free camera -> back to third person: put the fish ahead of the camera and snap behind it
-    third = true; eye = false;
+    // free camera -> back to the fish eye
+    third = true; eye = true;
     const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
     F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
     F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0;
-    snapCam();
   } else {
-    // third person <-> the fish eye: the fish stays where it is, the eye is placed by the frame loop
-    eye = !eye;
-    if (!eye) snapCam();
+    // the fish eye -> free camera
+    third = false; eye = false;
   }
 }
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
@@ -623,14 +611,6 @@ function collide() {
 }
 // distance to the rock at a point (metres, < 0 in water): temporarily moves the camera there to sample it
 const rockAt = (x, y, z) => { const ox = F[CX], oy = F[CY], oz = F[CZ]; F[CX] = x; F[CY] = y; F[CZ] = z; sd(0); F[CX] = ox; F[CY] = oy; F[CZ] = oz; return CS[0]; };
-// the longest camera boom that stays in clear water: shortens when a rock is behind the fish, so the rock
-// never fills the screen
-const clearBoom = (px, py, pz, tx, ty, tz) => {
-  let b = CAMD;
-  while (b > 6 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 6: the fish is 1.6 long, a shorter boom puts the camera inside it
-  return b;
-};
-
 // ---------------------------------------------------------------- Ocean City (v2.0): minimap, POIs, achievements
 // points of interest: name, x, y, z, radius (unlock when the player swims inside)
 const POIS = [
@@ -782,25 +762,9 @@ function frame(now) {
       F[PX] = px; F[PY] = py; F[PZ] = pz;
       const spd = sqrt(vx * vx + vy * vy + vz * vz);
       F[PWAG] += dt * (4 + spd * 1.1);
-      if (eye) {
-        // the fish eye: the camera is the eye itself, looking where the fish looks; the fish model is hidden, so the view is always clear
-        F[CX] = px + tx * 0.8; F[CY] = py + ty * 0.8 + 0.15; F[CZ] = pz + tz * 0.8;
-        F[YAW] = F[PYAW]; F[PIT] = pp;
-      } else {
-        // camera follows behind the fish with lag, looking a little ahead of it; the boom shortens when a rock
-        // is behind the fish, and the camera is pulled out toward the fish if it is in rock at all
-        const kc = 1 - exp(-dt * 5), b = clearBoom(px, py, pz, tx, ty, tz);
-        F[CX] += (px - tx * b - F[CX]) * kc;
-        F[CY] += (py - ty * b + CAMH - F[CY]) * kc;
-        F[CZ] += (pz - tz * b - F[CZ]) * kc;
-        if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
-          const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
-          const nd = max(6, dl - 2); // never closer than 6 to the fish, even when pulled out of rock
-          F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
-        }
-        const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
-        F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
-      }
+      // the fish eye: the camera is the eye itself, looking where the fish looks; the fish model is hidden, so the view is always clear
+      F[CX] = px + tx * 0.8; F[CY] = py + ty * 0.8 + 0.15; F[CZ] = pz + tz * 0.8;
+      F[YAW] = F[PYAW]; F[PIT] = pp;
       // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
       PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
       PL[4] = F[PYAW]; PL[5] = pp; PL[6] = F[PROLL]; PL[7] = 0;
@@ -898,7 +862,6 @@ const ui = (m) => {
 };
 const go = () => {
   sound(); bDive.textContent = 'Resume';
-  if (third && !eye) snapCam(); // start from the far third-person view, not from where the menu left the camera
   // phones: go fullscreen and ask for landscape; where that is refused the CSS rotation still applies
   if (mob) { ui(false); document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0); }
   else { lockTries = 0; capture(); } // desktop: the menu hides when the lock lands, not before
@@ -928,7 +891,6 @@ F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0; F[PWAG] = 0;
   PL[4] = F[PYAW]; PL[5] = F[PPIT]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
   Q.writeBuffer(uboPlayer, 0, PL);
 }
-snapCam(); // start behind the fish, far: the menu backdrop is the third-person view already
 // after an auto detail drop the page reloads: put the fish back where it was instead of the start viewpoint
 let savedPos = null;
 try { savedPos = localStorage.abyssalPos; } catch {}
@@ -936,7 +898,6 @@ if (savedPos) {
   const a = savedPos.split(',').map(Number);
   if (a.length === 5 && a.every(Number.isFinite)) {
     F[PX] = a[0]; F[PY] = a[1]; F[PZ] = a[2]; F[PYAW] = a[3]; F[PPIT] = a[4]; F[PROLL] = 0;
-    snapCam();
     PL[0] = a[0]; PL[1] = a[1]; PL[2] = a[2]; PL[3] = 1.6; PL[4] = a[3]; PL[5] = a[4]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
     Q.writeBuffer(uboPlayer, 0, PL);
   }
