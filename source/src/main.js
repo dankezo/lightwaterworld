@@ -17,15 +17,17 @@ const say = (m, to, ms) => {
 };
 const fail = (m) => { throw new Error(m, { cause: 1 }); }; // cause marks a message that is shown as it is
 // no WebGPU: show the fallback screen and stop here (a plain return leaves the wrapper catch quiet)
+// the reason is written into #fr so the user can report exactly why it failed
+const fbReason = (m) => { const f = $('fr'); if (f) f.textContent = m; };
 $('t').onclick = () => location.reload();
-if (!navigator.gpu) { body.className = 'f'; return; }
+if (!navigator.gpu) { fbReason('Reason: this browser does not expose WebGPU (navigator.gpu is missing).'); body.className = 'f'; return; }
 let adapter;
-try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { adapter = null; }
+try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { fbReason('Reason: requestAdapter threw: ' + (e && e.message ? e.message : e)); adapter = null; }
 if (!adapter) { // the GPU may still be recovering from a lost device: one retry before giving up
   await new Promise((r) => setTimeout(r, 1500));
-  try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { adapter = null; }
+  try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { fbReason('Reason: requestAdapter threw on retry: ' + (e && e.message ? e.message : e)); adapter = null; }
 }
-if (!adapter) { body.className = 'f'; return; }
+if (!adapter) { fbReason('Reason: no GPU adapter found. Hardware acceleration may be off, or the GPU is busy.'); body.className = 'f'; return; }
 $('w').hidden = !!navigator.userAgentData; // only Chromium-based browsers have it
 const hasTS = adapter.features.has('timestamp-query');
 const device = await adapter.requestDevice({ requiredFeatures: hasTS ? ['timestamp-query'] : [] });
