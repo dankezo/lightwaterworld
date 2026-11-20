@@ -413,7 +413,7 @@ let hud = false, third = true, eye = false; // third: swim as the gold fish; fal
 // V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
 // just ahead of the camera with the camera heading, so the camera can pull back behind it.
 // third-person camera: how far behind the fish, how high above it, how far ahead it looks
-const CAMD = 4.6, CAMH = 1.1, CAML = 2;
+const CAMD = 6.5, CAMH = 2, CAML = 2; // the camera sits farther back and higher, looking down at the fish a little
 // put the camera at its third-person spot at once: behind the fish and a little above, looking ahead of it.
 // Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
 const snapCam = () => {
@@ -639,7 +639,7 @@ function frame(now) {
       lkx += jx * 1.5 * dt; lky += jy * dt;
     }
     // mouse look through two cascaded low-pass stages
-    const kq = 1 - exp(-dt * 30); lkx += mdx * 0.0022; lky += mdy * 0.0022; mdx = 0; mdy = 0;
+    const kq = 1 - exp(-dt * 30); lkx += mdx * 0.0022; lky += mdy * 0.0035; mdx = 0; mdy = 0; // the mouse pitches up/down harder than it yaws, so a flick up lifts the fish
     const ax = lkx * kq, ay = lky * kq; lkx -= ax; lky -= ay; l2x += ax; l2y += ay;
     const dyw = l2x * kq, dpt = l2y * kq; l2x -= dyw; l2y -= dpt;
     const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 4.5), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd;
