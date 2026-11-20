@@ -20,7 +20,11 @@ const fail = (m) => { throw new Error(m, { cause: 1 }); }; // cause marks a mess
 $('t').onclick = () => location.reload();
 if (!navigator.gpu) { body.className = 'f'; return; }
 let adapter;
-try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { body.className = 'f'; return; }
+try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { adapter = null; }
+if (!adapter) { // the GPU may still be recovering from a lost device: one retry before giving up
+  await new Promise((r) => setTimeout(r, 1500));
+  try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { adapter = null; }
+}
 if (!adapter) { body.className = 'f'; return; }
 $('w').hidden = !!navigator.userAgentData; // only Chromium-based browsers have it
 const hasTS = adapter.features.has('timestamp-query');
@@ -429,7 +433,7 @@ let hud = false, third = true, eye = false; // third: swim as the gold fish; fal
 // V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
 // just ahead of the camera with the camera heading, so the camera can pull back behind it.
 // third-person camera: how far behind the fish, how high above it, how far ahead it looks
-const CAMD = 6.5, CAMH = 2, CAML = 2; // the camera sits farther back and higher, looking down at the fish a little
+const CAMD = 11, CAMH = 3.2, CAML = 2; // the camera sits far back and higher, looking down at the fish
 // put the camera at its third-person spot at once: behind the fish and a little above, looking ahead of it.
 // Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
 const snapCam = () => {
@@ -616,7 +620,7 @@ const rockAt = (x, y, z) => { const ox = F[CX], oy = F[CY], oz = F[CZ]; F[CX] = 
 // never fills the screen
 const clearBoom = (px, py, pz, tx, ty, tz) => {
   let b = CAMD;
-  while (b > 2 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 2: the fish is 1.6 long, a shorter boom puts the camera inside it
+  while (b > 4 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 4: the fish is 1.6 long, a shorter boom puts the camera inside it
   return b;
 };
 
@@ -773,7 +777,7 @@ function frame(now) {
         F[CZ] += (pz - tz * b - F[CZ]) * kc;
         if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
           const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
-          const nd = max(2, dl - 2); // never closer than 2 to the fish, even when pulled out of rock
+          const nd = max(4, dl - 2); // never closer than 4 to the fish, even when pulled out of rock
           F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
         }
         const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
