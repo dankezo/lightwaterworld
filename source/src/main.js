@@ -601,7 +601,12 @@ function sd(j) {
 // Moves the camera by F[MX..MZ] in steps shorter than its radius CR (so it can't pass through thin rock), pushing it
 // back out after each step and dropping velocity into the rock, so it slides along.
 const CR = 0.5;
+// the surface the fish last touched, for sliding: collide() stores the rock normal here, and the
+// fish movement projects its target velocity onto that surface so it slides along the rock
+// instead of pushing into it and stopping (the kinematic character-controller pattern)
+let hitNx = 0, hitNy = 0, hitNz = 0, hit = false;
 function collide() {
+  hit = false;
   const n = floor(sqrt(F[MX] * F[MX] + F[MY] * F[MY] + F[MZ] * F[MZ]) / 0.4) + 1;
   for (let i = 0; i < n; i++) {
     F[CX] += F[MX] / n; F[CY] += F[MY] / n; F[CZ] += F[MZ] / n;
@@ -612,7 +617,7 @@ function collide() {
       if (l < 0.075) break; // flat: deep in rock
       gx /= l; gy /= l; gz /= l; const vn = F[VX] * gx + F[VY] * gy + F[VZ] * gz;
       F[CX] -= gx * s; F[CY] -= gy * s; F[CZ] -= gz * s;
-      if (vn > 0) { F[VX] -= gx * vn; F[VY] -= gy * vn; F[VZ] -= gz * vn; }
+      if (vn > 0) { F[VX] -= gx * vn; F[VY] -= gy * vn; F[VZ] -= gz * vn; hitNx = gx; hitNy = gy; hitNz = gz; hit = true; }
     }
   }
 }
@@ -756,7 +761,11 @@ function frame(now) {
       F[PROLL] += (rt - F[PROLL]) * (1 - exp(-dt * 6));
       const cp = cos(pp), sy = sin(F[PYAW]), cw = cos(F[PYAW]), syp = sin(pp);
       const tx = sy * cp, ty = syp, tz = -cw * cp, rx = cw, rz = sy;
-      const vx = F[VX] + ((tx * mf + rx * mr * 0.6) * sp - F[VX]) * k, vy = F[VY] + ((ty * mf + mu * 0.6) * sp - F[VY]) * k, vz = F[VZ] + ((tz * mf + rz * mr * 0.6) * sp - F[VZ]) * k;
+      let tvx = (tx * mf + rx * mr * 0.6) * sp, tvy = (ty * mf + mu * 0.6) * sp, tvz = (tz * mf + rz * mr * 0.6) * sp;
+      // slide along the rock: when the last step touched a surface, drop the part of the
+      // target velocity that pushes into it, so holding W toward a rock glides along it
+      if (hit) { const vn = tvx * hitNx + tvy * hitNy + tvz * hitNz; if (vn > 0) { tvx -= hitNx * vn; tvy -= hitNy * vn; tvz -= hitNz * vn; } }
+      const vx = F[VX] + (tvx - F[VX]) * k, vy = F[VY] + (tvy - F[VY]) * k, vz = F[VZ] + (tvz - F[VZ]) * k;
       F[VX] = vx; F[VY] = vy; F[VZ] = vz;
       // swim the fish through the same rock-collision stepper the camera uses
       F[CX] = F[PX]; F[CY] = F[PY]; F[CZ] = F[PZ];
