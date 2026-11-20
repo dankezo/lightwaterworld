@@ -716,10 +716,15 @@ function frame(now) {
     // at the display's rate there is no telling if there is room, so try a little more now and then
     else { dynBad = 0; if (a < 12.5) k = 15 / a; else if (++dynOk > dynWait) { k = 1.17; dynOk = 0; } }
     k = k < 0.5 ? 0.5 : k > 1.7 ? 1.7 : k; const top = min(PIXMAX, DW * DH), mid = max(top / 2, PIXMIN), was = pix + det;
-    // too slow: pixels down to `mid` first, then draw distance, then the remaining pixels; faster goes back the same way
-    if (k < 1 ? pix > mid || det <= DETMIN : pix < mid || det >= 1) {
-      const end = k < 1 ? (det > DETMIN ? mid : PIXMIN) : det < 1 ? mid : top;
-      pix *= k; if (k < 1 ? pix < end : pix > end) pix = end;
+    // too slow: cut both pixels and draw distance at once. A heavy view (dense kelp, a big
+    // whale or rock filling the screen) is geometry-bound, so pixels alone do not fix it;
+    // faster goes back the same way as before (pixels first, then draw distance)
+    if (k < 1) {
+      pix *= k; if (pix < PIXMIN) pix = PIXMIN;
+      det *= sqrt(k); if (det < DETMIN) det = DETMIN;
+    } else if (pix < mid || det >= 1) {
+      const end = det < 1 ? mid : top;
+      pix *= k; if (pix > end) pix = end;
     } else { det *= sqrt(k); det = det < DETMIN ? DETMIN : det > 1 ? 1 : det; }
     if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
     dynN = dynT = dynG = dynGN = 0;
