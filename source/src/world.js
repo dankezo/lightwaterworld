@@ -16,6 +16,18 @@ const MESAS = [
   [-17, 62, -19, 78, 10, -6, 9, 3], [-21, 84, -18, 100, 11, -9, 8, 3],     // grotto overhang cliff
   [22, 67, 24, 80, 7, -11, 6, 2],        // grotto coral rock
   [-16, 122, 34, 122, 9, -27, 3, 2],     // grotto far wall
+  // Ocean City: a raised platform the city stands on, plus rock cores inside the
+  // spire, statue, gate posts and the four big towers, so the fish cannot swim through them
+  // (each core is narrower than the shell around it, so the rock stays hidden inside)
+  [80, -15, 110, 15, 28, -38, 3, 1],     // city platform
+  [95, 0, 95, 0, 3, -12, 3, 1],          // spire core (shell 3.5 wide there)
+  [120, -20, 120, -20, 2.5, -30, 3, 1],  // statue core (shell 2.8 wide there)
+  [60, 20, 60, 20, 1.2, -18, 3, 1],      // gate post cores (inside the 1.5 ring tube)
+  [80, 20, 80, 20, 1.2, -18, 3, 1],
+  [85, 25, 85, 25, 1.8, -22, 3, 1],      // tower cores (shell 2.1 wide there)
+  [105, -25, 105, -25, 1.8, -22, 3, 1],
+  [125, 5, 125, 5, 1.8, -22, 3, 1],
+  [75, -5, 75, -5, 1.8, -22, 3, 1],
 ];
 // vertical ring arches: cx, cy, cz, yaw, major radius, minor radius, y squash
 const ARCHES = [
@@ -32,6 +44,7 @@ const HOLES = [
 const CLEARS = [
   [0, -45, 0, 35, 22, 10], [0, -86, 0, -86, 46, 12], [42, 24, 74, 6, 22, 10], [72, -26, 72, -26, 26, 10],
   [-60, -36, -60, 36, 13, 8], [-60, 42, -18, 46, 12, 8], [4, 58, 8, 100, 24, 10], [-34, -74, -56, -46, 11, 8],
+  [80, -15, 110, 15, 28, 10], // Ocean City: keep random mesas out of the city
 ];
 const PURPLE = [6, 84];
 const zoneP = (x, z) => sstep(44, 26, hypot(x - PURPLE[0], z - PURPLE[1]));
@@ -306,6 +319,28 @@ function makeWorld(D, T, flyPts, POSES) {
   const gy = (x, z) => { const f = floorsAt(x, z); return f.length ? f[f.length - 2] : -45; };
   solid(10, -5, gy(-5, -4) - 0.6, -4, 1, qMul(qAxis(0, 1, 0, 1.2), qMul(qAxis(0, 0, 1, 0.16), qAxis(1, 0, 0, -0.3))), 2, 0.3, 1, 0);          // whale fluke
   solid(11, 59.5, -23, 6, 1, qMul(qAxis(0, 1, 0, -PI / 2), qMul(qAxis(0, 0, 1, -0.1), qAxis(1, 0, 0, 0.32))), 3, 0.5, 1, 0); // ship hull
+  // --- Ocean City (v2.0): high-tech ruins on the platform (top -38, bases sunk to -39)
+  // mesh ids: 28 tower, 29 column, 30 dome, 31 gate, 32 crystal, 33 statue, 34 plaza, 35 rune, 36 conduit, 37 arc
+  // materials: 6 alloy, 7 energy, 8 rune, 2 pale stone
+  const CY = -39;
+  solid(34, 95, CY, 0, 1, [0, 0, 0, 1], 6, 0.2, 1, 0); // plaza disc
+  solid(28, 95, CY, 0, 1, [0, 0, 0, 1], 6, 0.1, 1, 0); // the Spire
+  for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; solid(29, 95 + cos(a) * 22, CY, sin(a) * 22, 1, [0, 0, 0, 1], 6, k / 8, 1, 0); } // colonnade ring
+  solid(33, 120, CY, -20, 1, qAxis(0, 1, 0, -0.6), 2, 0.4, 1, 0); // the Statue (pale stone)
+  solid(31, 70, -26, 20, 1, [0, 0, 0, 1], 6, 0.3, 1, 0); // the Energy Gate ring
+  solid(34, 70, -26, 20, 0.5, qAxis(1, 0, 0, PI / 2), 7, 0.6, 1, 0); // portal interior (vertical disc)
+  solid(32, 110, -20, 15, 1, [0, 0, 0, 1], 7, 0.7, 1, 1.5); // the floating Crystal (bobs)
+  solid(30, 80, CY, -25, 1, [0, 0, 0, 1], 2, 0.5, 1, 0); // domes (pale stone)
+  solid(30, 115, CY, 10, 1, [0, 0, 0, 1], 2, 0.8, 1, 0);
+  for (const t of [[85, 25], [105, -25], [125, 5], [75, -5]]) solid(28, t[0], CY, t[1], 0.6, [0, 0, 0, 1], 6, rnd(), 1, 0); // four smaller towers
+  solid(35, 95, CY + 1.5, 0, 1, [0, 0, 0, 1], 8, 0.2, 1, 0); // runes
+  solid(35, 70, CY + 1.5, 20, 0.75, [0, 0, 0, 1], 8, 0.5, 1, 0);
+  solid(35, 120, CY + 1.5, -20, 0.75, [0, 0, 0, 1], 8, 0.8, 1, 0);
+  solid(31, 95, CY + 1.5, 0, 2.2, qAxis(1, 0, 0, PI / 2), 7, 0.4, 1, 0); // ring conduit around the plaza (flat)
+  solid(36, 85, CY + 1.5, 20, 1, [0, 0, 0, 1], 7, 0.3, 1, 0); // conduit to the gate (along x)
+  solid(36, 95, CY + 1.5, -12, 1, qAxis(0, 1, 0, PI / 2), 7, 0.6, 1, 0); // conduit south (along z)
+  solid(37, 100, CY, 8, 1, [0, 0, 0, 1], 7, 0.2, 1, 0); // electric arcs
+  solid(37, 108, CY, -22, 0.8, qAxis(0, 1, 0, 1.2), 7, 0.7, 1, 0);
   // barrel sponges in front of viewpoint 4, small sponges around the fluke base
   rseed(12);
   for (const b of [[7, 3.2, 1.3, 4], [8.4, 4.6, 1.0, 6], [9.6, 2.6, 1.5, 4], [11, 5, 1.1, 5], [8, -3.6, 1.2, 4], [12.5, 2, 1.2, 6], [9, 3.9, 0.8, 4]]) { const p = rel(3, b[0], b[1]), c = POSES[3]; let ux = (c[0] - p[0]) * 0.07, uz = (c[2] - p[1]) * 0.07; const l = hypot(ux, 1, uz); solid(b[3], p[0], gy(p[0], p[1]) - 0.1, p[1], b[2], qFromY(ux / l, 1 / l, uz / l), 4, rnd(), 1, 0); }
@@ -383,12 +418,29 @@ function makeWorld(D, T, flyPts, POSES) {
   // near 9, -41, 6), so it is in view from the first dive
   const worm = [-2, -38, 5, 10, 0.5, 0.05, 1.2, 0.3];
 
+  // --- Ocean City creatures (v2.0): same 8-float layout as fish (cx, cy, cz, R, seed, speed, size, phase)
+  // fsBigFish branches on the seed: shark .0-.25, whale .25-.5, turtle .5-.75, leviathan .75-1
+  const shark = [], whale = [], turtle = [], mermaid = [], ray = [], octopus = [], kraken = [], eel = [], serpent = [];
+  rseed(16);
+  for (let i = 0; i < 4; i++) { const a = rnd() * TAU; shark.push(95 + cos(a) * 25, rr(-30, -18), sin(a) * 25, 25, rnd() * 0.25, 0.06, rr(2.5, 3.5), rnd()); } // sharks patrolling the city
+  whale.push(40, -25, -60, 60, 0.3, 0.02, 7, 0.1, -60, -22, 60, 70, 0.4, 0.018, 8, 0.6); // two slow giants
+  whale.push(-100, -35, -80, 80, 0.85, 0.015, 12, 0.2); // the leviathan: enormous, in the deep
+  for (let i = 0; i < 4; i++) { const a = rnd() * TAU; turtle.push(95 + cos(a) * 30, rr(-32, -24), sin(a) * 30, 30, 0.5 + rnd() * 0.25, 0.03, rr(1.2, 1.6), rnd()); }
+  turtle.push(0, -30, 80, 25, 0.6, 0.03, 1.4, 0.3); // one turtle in the grotto
+  for (let i = 0; i < 3; i++) { const a = rnd() * TAU; mermaid.push(95 + cos(a) * 18, rr(-28, -20), sin(a) * 18, 18, rnd(), 0.05, 1.6, rnd()); } // mermaids in the city
+  mermaid.push(0, -25, 80, 20, 0.5, 0.04, 1.6, 0.7); // one mermaid in the grotto
+  for (let i = 0; i < 5; i++) { const a = rnd() * TAU, r = rr(20, 80); ray.push(cos(a) * r, rr(-28, -16), sin(a) * r, rr(15, 30), rnd(), 0.06, rr(2.5, 4), rnd()); }
+  for (let i = 0; i < 4; i++) { const a = rnd() * TAU, r = rr(15, 70); octopus.push(cos(a) * r, rr(-30, -20), sin(a) * r, rr(4, 8), rnd(), 0.05, rr(1, 1.5), rnd()); }
+  kraken.push(60, -30, -40, 30, 0.7, 0.02, 6, 0.4); // the kraken: huge, near the deep rock
+  for (let i = 0; i < 3; i++) { const a = rnd() * TAU, r = rr(20, 60); eel.push(cos(a) * r, rr(-35, -25), sin(a) * r, rr(8, 15), rnd(), 0.06, 0.5, rnd()); } // eels (thin)
+  serpent.push(-80, -32, -60, 50, 0.7, 0.02, 4, 0.1); // the sea serpent: enormous
+
   // --- drifting particles
   const snow = new Float32Array(9000 * 4);
   for (let i = 0; i < snow.length; i++) snow[i] = rnd();
 
   const sol = { data: [], ranges: [] }; let si = 0;
-  for (let m = 0; m < 12; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
+  for (let m = 0; m < 38; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
   const packC = (L) => {
     let n = 0; const start = new Uint32Array(nCells + 1);
     for (let c = 0; c < nCells; c++) { start[c] = n; n += L[c].length / 12; }
@@ -398,7 +450,7 @@ function makeWorld(D, T, flyPts, POSES) {
     for (let c = 0; c < nCells; c++) { const a = L[c]; for (let i = 0; i < a.length; i += 12) { for (let j = 0; j < 12; j++) data[k++] = a[i + j]; lo[c] = min(lo[c], a[i + 1] - 3); hi[c] = max(hi[c], a[i + 1] + 3); } }
     return { data, n, start, lo, hi };
   };
-  return { gy, glints: new Float32Array(glints), chunks: chunks.map(packC), props: props.map(packC), big: pack(big), bigF: pack(big, 2, 1.5), small: pack(small), solids: { data: new Float32Array(sol.data), ranges: sol.ranges }, bubbles: new Float32Array(bubbles), volD, gm, fish: new Float32Array(fish), mantas: new Float32Array(mantas), jelly: new Float32Array(jelly), worm: new Float32Array(worm), snow };
+  return { gy, glints: new Float32Array(glints), chunks: chunks.map(packC), props: props.map(packC), big: pack(big), bigF: pack(big, 2, 1.5), small: pack(small), solids: { data: new Float32Array(sol.data), ranges: sol.ranges }, bubbles: new Float32Array(bubbles), volD, gm, fish: new Float32Array(fish), mantas: new Float32Array(mantas), jelly: new Float32Array(jelly), worm: new Float32Array(worm), shark: new Float32Array(shark), whale: new Float32Array(whale), turtle: new Float32Array(turtle), mermaid: new Float32Array(mermaid), ray: new Float32Array(ray), octopus: new Float32Array(octopus), kraken: new Float32Array(kraken), eel: new Float32Array(eel), serpent: new Float32Array(serpent), snow, map: MESAS.map(m => [m[0], m[1], m[2], m[3], m[4]]) };
 }
 const fract = (x) => x - floor(x);
 
@@ -586,5 +638,130 @@ function meshWorm() {
   for (let k = 0; k <= 16; k++) pts.push([-k * 0.32, 0, 0]);
   m.tube(pts, (k) => 0.3 * (k % 2 === 0 ? 0.78 : 1.0), 8, true, (k) => floor(k / 2) / 7);
   m.tube([[0.05, 0, 0], [0.5, 0, 0], [0.95, 0, 0]], (k) => 0.26 * (1 - k / 2.4), 8, true, () => 0);
+  return m;
+}
+
+// ---------------------------------------------------------------- Ocean City (v2.0): high-tech ruins
+// a tall spire: stepped octagonal tower with a pointed tip (base at y 0, ~42 tall)
+function meshTower() {
+  return meshLathe([[5, 0, 1], [5, 8, 1], [3.5, 8, 1], [3.5, 28, 1], [2, 28, 1], [2, 34, 1], [0.01, 42, 1]], 8, 0);
+}
+// an energy column: flared base and capital, glowing shaft
+function meshColumn() {
+  return meshLathe([[1.8, 0, 1], [1.8, 1, 1], [1.2, 1, 1], [1.2, 17, 1], [1.8, 17, 1], [1.8, 18, 1], [0.01, 18.5, 1]], 8, 0);
+}
+// a dome: squashed hemisphere (base at y 0, radius 8, height 6)
+function meshDome() {
+  return meshLathe([[8, 0, 1], [7.4, 1.5, 1], [5.7, 3, 1], [3.5, 4.5, 1], [0.01, 6, 1]], 16, 0);
+}
+// a portal ring: torus in the XY plane, radius 10, tube 1.5 (centre at the origin)
+function meshGate() {
+  const m = new Mesh(), pts = [];
+  for (let k = 0; k <= 16; k++) { const a = k / 16 * TAU; pts.push([cos(a) * 10, sin(a) * 10, 0]); }
+  m.tube(pts, 1.5, 8, false, () => 1);
+  return m;
+}
+// a floating crystal: elongated octahedron, centre at the origin
+function meshCrystal() {
+  const m = new Mesh();
+  const T = m.v(0, 3, 0, 1), B = m.v(0, -3, 0, 1), M = [];
+  for (let s = 0; s < 4; s++) { const a = s / 4 * TAU; M.push(m.v(cos(a) * 1.2, 0, sin(a) * 1.2, 1)); }
+  for (let s = 0; s < 4; s++) { const s2 = (s + 1) % 4; m.tri(T, M[s2], M[s]); m.tri(B, M[s], M[s2]); }
+  return m;
+}
+// a colossal robed statue: lathe body, octahedron head, tube arms (base at y 0, ~22 tall)
+function meshStatue() {
+  const m = new Mesh();
+  const body = meshLathe([[4, 0, 1], [3.5, 4, 1], [2.8, 9, 1], [2, 13, 1], [1.6, 15, 1], [1.7, 17, 1], [1.2, 19, 1], [0.01, 20, 1]], 8, 0);
+  m.p.push(...body.p); m.i.push(...body.i); m.aux.push(...body.aux);
+  const top = m.v(0, 22.2, 0, 1), bot = m.v(0, 19.8, 0, 1), R = [];
+  for (let s = 0; s < 4; s++) { const a = s / 4 * TAU; R.push(m.v(cos(a) * 1.1, 21, sin(a) * 1.1, 1)); }
+  for (let s = 0; s < 4; s++) { const s2 = (s + 1) % 4; m.tri(top, R[s2], R[s]); m.tri(bot, R[s], R[s2]); }
+  m.tube([[1.4, 18, 0], [2.2, 15, 0.3], [2.6, 12, 0.5]], 0.4, 6, true, () => 1);
+  m.tube([[-1.4, 18, 0], [-2.2, 15, -0.3], [-2.6, 12, -0.5]], 0.4, 6, true, () => 1);
+  return m;
+}
+// a paved plaza disc: flat-topped cylinder, radius 18, height 1.5 (base at y 0)
+function meshPlaza() {
+  return meshLathe([[18, 0, 1], [18, 1.5, 1], [0.01, 1.5, 1]], 24, 0);
+}
+// a magical rune: two flat glowing annuli on the ground (outer 8/6.5, inner 3.5/2.8), double-sided
+function meshRune() {
+  const m = new Mesh();
+  const ring = (ro, ri) => {
+    const O = [], I = [];
+    for (let s = 0; s < 16; s++) { const a = s / 16 * TAU; O.push(m.v(cos(a) * ro, 0, sin(a) * ro, 1)); I.push(m.v(cos(a) * ri, 0, sin(a) * ri, 1)); }
+    for (let s = 0; s < 16; s++) { const s2 = (s + 1) % 16; m.quad(O[s2], O[s], I[s], I[s2]); m.quad(O[s], O[s2], I[s2], I[s]); }
+  };
+  ring(8, 6.5); ring(3.5, 2.8);
+  return m;
+}
+// an energy conduit: a straight thin tube along x, 30 long, centred at the origin
+function meshConduit() {
+  const m = new Mesh();
+  m.tube([[-15, 0, 0], [-5, 0, 0], [5, 0, 0], [15, 0, 0]], 0.4, 6, true, () => 1);
+  return m;
+}
+// an electric arc: a jagged bolt tube, 15 tall (base at y 0)
+function meshArc() {
+  const m = new Mesh();
+  m.tube([[0, 0, 0], [2, 3, 1], [1, 6, -1], [3, 9, 0], [2, 12, 1], [0, 15, 0]], 0.25, 5, true, () => 1);
+  return m;
+}
+
+// ---------------------------------------------------------------- Ocean City creatures (v2.0)
+// a tube body from rings (x, half-height, half-width), 6 sides, head at +x (like meshFish)
+function bodyRings(m, X, H, W) {
+  const rings = [];
+  for (let i = 0; i < X.length; i++) { const r = []; for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; r.push(m.v(X[i], sin(a) * H[i], cos(a) * W[i])); } rings.push(r); }
+  for (let i = 0; i < X.length - 1; i++) for (let k = 0; k < 6; k++) { const k2 = (k + 1) % 6; m.quad(rings[i][k], rings[i + 1][k], rings[i + 1][k2], rings[i][k2]); }
+}
+// a flat fin, double-sided
+function fin(m, a, b, c) { m.tri(a, b, c); m.tri(a, c, b); }
+// a shark: streamlined body (head +x, tail -x), dorsal fin, tail fluke, pectoral fins
+function meshShark() {
+  const m = new Mesh();
+  bodyRings(m, [0.55, 0.4, 0.15, -0.15, -0.4], [0.02, 0.1, 0.15, 0.1, 0.03], [0.02, 0.07, 0.09, 0.05, 0.015]);
+  fin(m, m.v(0.25, 0.12, 0), m.v(0.1, 0.38, 0), m.v(-0.05, 0.12, 0)); // dorsal
+  fin(m, m.v(-0.4, 0, 0), m.v(-0.62, 0.28, 0), m.v(-0.55, 0, 0)); // tail fluke, upper
+  fin(m, m.v(-0.4, 0, 0), m.v(-0.55, 0, 0), m.v(-0.62, -0.28, 0)); // tail fluke, lower
+  fin(m, m.v(0.25, -0.05, 0.06), m.v(-0.05, -0.05, 0.06), m.v(0.1, -0.08, 0.35)); // pectoral, right
+  fin(m, m.v(0.25, -0.05, -0.06), m.v(0.1, -0.08, -0.35), m.v(-0.05, -0.05, -0.06)); // pectoral, left
+  return m;
+}
+// a whale: big rounded body (head +x, tail -x), horizontal tail fluke, long pectoral fins
+function meshWhale() {
+  const m = new Mesh();
+  bodyRings(m, [0.55, 0.35, 0.0, -0.3, -0.48], [0.05, 0.18, 0.22, 0.15, 0.05], [0.05, 0.15, 0.18, 0.12, 0.04]);
+  fin(m, m.v(-0.48, 0, 0), m.v(-0.62, 0, 0.12), m.v(-0.7, 0, 0.35)); // tail fluke, right
+  fin(m, m.v(-0.48, 0, 0), m.v(-0.7, 0, -0.35), m.v(-0.62, 0, -0.12)); // tail fluke, left
+  fin(m, m.v(0.3, -0.1, 0.15), m.v(-0.1, -0.12, 0.15), m.v(-0.05, -0.15, 0.55)); // pectoral, right
+  fin(m, m.v(0.3, -0.1, -0.15), m.v(-0.05, -0.15, -0.55), m.v(-0.1, -0.12, -0.15)); // pectoral, left
+  return m;
+}
+// a sea turtle: domed shell (head +x), four flippers, small head
+function meshTurtle() {
+  const m = new Mesh();
+  bodyRings(m, [0.38, 0.18, -0.08, -0.3], [0.06, 0.15, 0.17, 0.09], [0.08, 0.19, 0.21, 0.11]);
+  fin(m, m.v(0.38, 0, 0), m.v(0.55, 0.05, 0), m.v(0.55, -0.05, 0)); // head
+  fin(m, m.v(0.25, -0.08, 0.18), m.v(-0.05, -0.08, 0.2), m.v(0.1, -0.1, 0.5)); // front flipper, right
+  fin(m, m.v(0.25, -0.08, -0.18), m.v(0.1, -0.1, -0.5), m.v(-0.05, -0.08, -0.2)); // front flipper, left
+  fin(m, m.v(-0.15, -0.08, 0.15), m.v(-0.3, -0.08, 0.12), m.v(-0.2, -0.1, 0.4)); // rear flipper, right
+  fin(m, m.v(-0.15, -0.08, -0.15), m.v(-0.2, -0.1, -0.4), m.v(-0.3, -0.08, -0.12)); // rear flipper, left
+  return m;
+}
+// a mermaid: humanoid head and torso (head +x), flowing hair, fish tail (-x)
+function meshMermaid() {
+  const m = new Mesh();
+  bodyRings(m, [0.32, 0.18, 0.0, -0.12], [0.05, 0.09, 0.1, 0.07], [0.05, 0.08, 0.09, 0.06]);
+  const hx = 0.42, hr = 0.09;
+  const top = m.v(hx, hr, 0), bot = m.v(hx, -hr, 0), R = [];
+  for (let s = 0; s < 4; s++) { const a = s / 4 * TAU; R.push(m.v(hx + cos(a) * hr, 0, sin(a) * hr)); }
+  for (let s = 0; s < 4; s++) { const s2 = (s + 1) % 4; m.tri(top, R[s2], R[s]); m.tri(bot, R[s], R[s2]); }
+  m.tube([[0.4, 0.06, 0], [0.2, 0.04, 0], [-0.05, 0, 0]], 0.05, 5, true, () => 1); // hair
+  m.tube([[0.28, 0.02, 0.07], [0.1, 0.0, 0.22], [-0.08, -0.02, 0.3]], 0.03, 5, true, () => 1); // arm, right
+  m.tube([[0.28, 0.02, -0.07], [0.1, 0.0, -0.22], [-0.08, -0.02, -0.3]], 0.03, 5, true, () => 1); // arm, left
+  fin(m, m.v(-0.12, 0, 0), m.v(-0.4, 0.22, 0), m.v(-0.32, 0, 0)); // tail, upper
+  fin(m, m.v(-0.12, 0, 0), m.v(-0.32, 0, 0), m.v(-0.4, -0.22, 0)); // tail, lower
   return m;
 }

@@ -351,6 +351,26 @@ fn tri(p: vec3f, n: vec3f, s: f32) -> TP {
     if (hue > .75) { alb = vec3f(.44, .18, .42); }
     alb *= (.45 + .75 * B.h) * (.7 + .3 * C.h);
     vao = i.ao * i.ao; gloss = .2; bump = 1.4; flu = .55;
+  } else if (mat == 6) {
+    // Ocean City alloy: dark gunmetal with cyan emissive circuit lines, plus a lightning flash
+    alb = mix(vec3f(.05, .06, .08), vec3f(.13, .15, .18), B.h) * (.7 + .5 * C.h);
+    gloss = .8; bump = .4;
+    let cir = ss(.48, .52, fract(A.c * 3. + B.c * 2.));
+    emi = vec3f(.1, .8, 1.) * cir * (1.2 + .8 * sin(g.cam.w * 2. + i.op.x * .5 + i.op.z * .5));
+    let fl = pow(max(0., sin(g.cam.w * .8 + i.m.y * 2.)), 24.);
+    emi += vec3f(.3, .7, 1.) * fl * 1.5;
+  } else if (mat == 7) {
+    // energy crystal / conduit: bright cyan, pulsing, with a lightning flash
+    alb = vec3f(.05, .15, .2);
+    emi = vec3f(.2, .9, 1.) * (1.2 + .6 * sin(g.cam.w * 3. + i.op.y * 1.5));
+    let fl = pow(max(0., sin(g.cam.w * 1.1 + i.m.y * 3.)), 16.);
+    emi += vec3f(.5, .9, 1.) * fl * 2.;
+    gloss = .5; bump = .2; flu = .6;
+  } else if (mat == 8) {
+    // rune: glowing magenta-cyan, slow pulse
+    alb = vec3f(.08, .05, .12);
+    emi = mix(vec3f(.9, .2, .9), vec3f(.2, .8, 1.), .5 + .5 * sin(g.cam.w * 1.5 + i.op.x * .3)) * (1. + .5 * sin(g.cam.w * 2.));
+    gloss = .3; bump = .2;
   } else {
     let hue = fract(sd * 5.73);
     alb = mix(vec3f(.80, .08, .10), vec3f(.90, .22, .40), fract(hue * 4.));
@@ -665,6 +685,135 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   // x <= 0 and the drill nose starts at x 0.05, so the x gate keeps the eyes off the nose
   let eye = step(.5, 1. - seg) * step(i.op.x, .04) * ss(.16, .22, i.op.y) * ss(.06, .12, abs(i.op.z)) * (1. - ss(.2, .26, abs(i.op.z)));
   c += vec3f(1., .08, .05) * eye * 2.2;
+  return fin(fog(c, i.wp, z));
+}
+// Ocean City big fish (vsFish): the seed picks the kind - shark .0-.25, whale .25-.5, turtle .5-.75, leviathan .75-1
+@fragment fn fsBigFish(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  var alb = vec3f(.4, .5, .6);
+  var glow = vec3f(0.);
+  if (i.sd < .25) {
+    // shark: grey-blue back, pale belly, darker dorsal
+    alb = mix(vec3f(.55, .62, .68), vec3f(.85, .88, .9), ss(.1, -.15, i.op.y));
+    alb = mix(alb, vec3f(.25, .3, .35), ss(.08, .15, i.op.y));
+  } else if (i.sd < .5) {
+    // whale: deep blue-grey, pale belly, mottled
+    alb = mix(vec3f(.25, .35, .45), vec3f(.7, .75, .78), ss(.05, -.2, i.op.y));
+    let mo = step(.75, hs(floor(i.op.x * 7.) * 2.3 + floor(i.op.y * 7.) * 5.1));
+    alb = mix(alb, vec3f(.5, .55, .6), mo * .4);
+  } else if (i.sd < .75) {
+    // turtle: olive-green shell, warm belly, shell plates
+    alb = mix(vec3f(.35, .45, .2), vec3f(.75, .7, .5), ss(.1, -.1, i.op.y));
+    let sc = step(fract(i.op.x * 5. + i.op.y * 3.), .5);
+    alb = mix(alb, vec3f(.2, .28, .12), sc * .3 * step(0., i.op.y));
+  } else {
+    // leviathan: near-black with ember-red cracks and a cold glow
+    alb = vec3f(.06, .05, .08);
+    let cr = ss(.45, .5, fract(i.op.x * 4. + i.op.y * 6.));
+    alb = mix(alb, vec3f(.5, .08, .03), cr * .7);
+    glow = vec3f(.9, .15, .05) * cr * (.8 + .4 * sin(g.cam.w * 2. + i.sd * 40.));
+  }
+  let E = sunE(i.wp.y, z) * i.lt;
+  var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
+  c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.6 + vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25 * vv.g;
+  c += glow;
+  return fin(fog(c, i.wp, z));
+}
+// mermaid (vsFish): warm skin on the upper body (op.x > 0.1), teal scales on the tail (op.x < -0.05)
+@fragment fn fsMermaid(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  var alb = mix(vec3f(.95, .75, .6), vec3f(.1, .6, .65), ss(.1, -.05, i.op.x));
+  let sc = step(fract(i.op.x * 8. + i.op.y * 6.), .5);
+  alb = mix(alb, vec3f(.05, .35, .4), sc * .35 * step(-.05, -i.op.x));
+  alb = mix(alb, vec3f(.95, .8, .4), step(.86, fract(i.sd * 7.7)) * .4 * step(-.05, -i.op.x));
+  let hair = ss(.25, .3, i.op.x) * ss(.02, .06, i.op.y);
+  alb = mix(alb, vec3f(.05, .25, .3), hair * .8);
+  let E = sunE(i.wp.y, z) * i.lt;
+  var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
+  c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.6 + vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25 * vv.g;
+  c += vec3f(.2, .8, .9) * step(.86, fract(i.sd * 7.7)) * .3 * step(-.05, -i.op.x);
+  return fin(fog(c, i.wp, z));
+}
+// ray (vsManta): sandy back with dark spots, pale belly
+@fragment fn fsRay(i: VO) -> @location(0) vec4f {
+  let dist = length(i.wp - g.cam.xyz);
+  let ca = caus(i.wp, dist);
+  let tx = textureSample(tD, sR, i.op.xz * .9 + i.sd);
+  let n = normalize(i.n + (vec3f(tx.r, 0., tx.g) - vec3f(.5, 0., .5)) * .5); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let top = ss(-.2, .25, normalize(i.n).y);
+  var back = vec3f(.45, .38, .28) + vec3f(.15, .12, .08) * ss(.5, .75, tx.a);
+  let sp = step(.78, hs(floor(i.op.x * 12.) * 1.7 + floor(i.op.z * 12.) * 3.3));
+  back = mix(back, vec3f(.15, .12, .1), sp * .6);
+  var belly = vec3f(.85, .82, .75) * (.7 + .5 * tx.b);
+  var alb = mix(belly, back, top);
+  let E = sunE(i.wp.y, z) * shadow4(i.wp + n * .3);
+  let ndv = sat(dot(n, V));
+  var c = alb * (E * sat(dot(n, L)) * (.3 + ca) + amb(i.wp, n, vv.g, z) * 1.1 + side(i.wp, n, 1., z) * .8);
+  c += E * pow(sat(dot(n, normalize(V + L))), 30.) * .5 * (.3 + ca);
+  let sky = amb(i.wp, vec3f(0., 1., 0.), vv.g, z);
+  c += alb * sky * ca * .45 * (1. - top) + sky * pow(1. - ndv, 3.) * .35;
+  return fin(fog(c, i.wp, z));
+}
+// octopus (vsJelly): rusty orange mantle, pale arms with dark suckers
+@fragment fn fsOctopus(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let bell = step(i.sd, .5);
+  var alb = mix(vec3f(.8, .45, .2), vec3f(.9, .7, .55), bell) * .7;
+  let suck = step(.8, hs(floor(i.op.x * 10.) * 2.2 + floor(i.op.y * 10.) * 4.4)) * (1. - bell);
+  alb = mix(alb, vec3f(.2, .12, .1), suck * .5);
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.2);
+  let rim = pow(1. - sat(dot(n, V)), 2.);
+  c += vec3f(.9, .5, .25) * (mix(.4, 1., bell) * (.5 + .4 * i.lt) + rim * .8);
+  return fin(fog(c, i.wp, z));
+}
+// kraken (vsJelly): near-black mantle, blood-red glow, pale suckers
+@fragment fn fsKraken(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let bell = step(i.sd, .5);
+  var alb = mix(vec3f(.08, .06, .1), vec3f(.15, .08, .12), bell) * .8;
+  let suck = step(.75, hs(floor(i.op.x * 8.) * 3.1 + floor(i.op.y * 8.) * 6.2)) * (1. - bell);
+  alb = mix(alb, vec3f(.7, .65, .6), suck * .4);
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.2);
+  let rim = pow(1. - sat(dot(n, V)), 2.);
+  c += vec3f(.9, .08, .05) * (mix(.6, 1.6, bell) * (.6 + .5 * i.lt) + rim * 1.5);
+  return fin(fog(c, i.wp, z));
+}
+// moray eel (vsWorm): olive-brown with a yellow head, dark blotches, pale gold stripe
+@fragment fn fsEel(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let seg = i.sd;
+  var alb = vec3f(.35, .3, .15) * (.85 + .3 * step(.5, fract(seg * .5)));
+  let blot = step(.7, hs(floor(i.op.x * 6.) * 1.9 + floor(i.op.y * 6.) * 4.7));
+  alb = mix(alb, vec3f(.15, .12, .06), blot * .5);
+  alb = mix(alb, vec3f(.85, .7, .2), step(.5, 1. - seg) * .7);
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.1);
+  c += E * pow(sat(dot(n, normalize(V + L))), 40.) * 1.2;
+  let strip = ss(.2, .28, i.op.y);
+  c += vec3f(.9, .8, .3) * strip * .8;
+  return fin(fog(c, i.wp, z));
+}
+// sea serpent (vsWorm): abyssal black-green, sickly green glow, burning eyes on the head
+@fragment fn fsSerpent(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let seg = i.sd;
+  var alb = vec3f(.04, .08, .06) * (.85 + .3 * step(.5, fract(seg * .5)));
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.1);
+  c += E * pow(sat(dot(n, normalize(V + L))), 40.) * 1.2;
+  let strip = ss(.2, .28, i.op.y);
+  c += vec3f(.3, 1., .4) * strip * 1.8;
+  let eye = step(.5, 1. - seg) * step(i.op.x, .04) * ss(.16, .22, i.op.y) * ss(.06, .12, abs(i.op.z)) * (1. - ss(.2, .26, abs(i.op.z)));
+  c += vec3f(1., .2, .05) * eye * 3.;
   return fin(fog(c, i.wp, z));
 }
 `;

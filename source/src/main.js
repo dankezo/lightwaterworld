@@ -113,6 +113,15 @@ const pFish = scenePipe(mAnim, 'vsFish', 'fsFish', [vbSolid, ibAnim]);
 const pManta = scenePipe(mAnim, 'vsManta', 'fsManta', [vbSolid, ibAnim]);
 const pJelly = scenePipe(mAnim, 'vsJelly', 'fsJelly', [vbSolid, ibAnim]);
 const pWorm = scenePipe(mAnim, 'vsWorm', 'fsWorm', [vbSolid, ibAnim]);
+// Ocean City creatures (v2.0): big fish share vsFish (seed picks the kind), ray reuses vsManta,
+// octopus/kraken reuse vsJelly, eel/serpent reuse vsWorm
+const pBigFish = scenePipe(mAnim, 'vsFish', 'fsBigFish', [vbSolid, ibAnim]);
+const pMermaid = scenePipe(mAnim, 'vsFish', 'fsMermaid', [vbSolid, ibAnim]);
+const pRay = scenePipe(mAnim, 'vsManta', 'fsRay', [vbSolid, ibAnim]);
+const pOctopus = scenePipe(mAnim, 'vsJelly', 'fsOctopus', [vbSolid, ibAnim]);
+const pKraken = scenePipe(mAnim, 'vsJelly', 'fsKraken', [vbSolid, ibAnim]);
+const pEel = scenePipe(mAnim, 'vsWorm', 'fsEel', [vbSolid, ibAnim]);
+const pSerpent = scenePipe(mAnim, 'vsWorm', 'fsSerpent', [vbSolid, ibAnim]);
 // player fish: its own module and layout (G uniform + player uniform), reusing the fish mesh
 const bglPlayer = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, buffer: {} }] });
 const plPlayer = device.createPipelineLayout({ bindGroupLayouts: [bglPlayer] });
@@ -302,6 +311,10 @@ const meshes = [meshChunk(1, 3), meshChunk(7, 3), meshChunk(13, 3), meshChunk(22
   meshCoral(0), meshCoral(1), meshTubes()].map((m) => m.build());
 meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().build(),
   meshChunk(3).build(), meshChunk(11).build(), meshChunk(29).build(), meshChunk(5, 3).build(), meshChunk(17, 3).build(), meshChunk(41, 3).build(), meshChunk(9, 1).build(), meshCoral(0, 1).build(), meshCoral(1, 1).build(), meshChunk(5, 2, 1).build(), meshChunk(17, 2, 1).build(), meshChunk(41, 2, 1).build(), meshJelly().build(), meshWorm().build());
+// Ocean City (v2.0): ids 28-37 (tower, column, dome, gate, crystal, statue, plaza, rune, conduit, arc)
+meshes.push(meshTower().build(), meshColumn().build(), meshDome().build(), meshGate().build(), meshCrystal().build(), meshStatue().build(), meshPlaza().build(), meshRune().build(), meshConduit().build(), meshArc().build());
+// Ocean City creatures (v2.0): ids 38-41 (turtle, shark, whale, mermaid)
+meshes.push(meshTurtle().build(), meshShark().build(), meshWhale().build(), meshMermaid().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
 const allV = new Uint8Array(nV * 16), allI = new Uint32Array(nI);
@@ -314,9 +327,12 @@ const ibSolids = buf(solidData, BU.VERTEX);
 const ibChunk = Wd.chunks.map((c) => buf(c.data, BU.VERTEX)), ibProp = Wd.props.map((c) => buf(c.data, BU.VERTEX));
 const ibBig = buf(new Uint8Array(Wd.big.buf), BU.VERTEX), ibBigF = buf(new Uint8Array(Wd.bigF.buf), BU.VERTEX), ibSmall = buf(new Uint8Array(Wd.small.buf), BU.VERTEX);
 const ibFish = buf(Wd.fish, BU.VERTEX), ibManta = buf(Wd.mantas, BU.VERTEX), ibJelly = buf(Wd.jelly, BU.VERTEX), ibWorm = buf(Wd.worm, BU.VERTEX), ibBubbles = buf(Wd.bubbles, BU.VERTEX), ibSnowB = buf(Wd.snow, BU.VERTEX);
+const ibShark = buf(Wd.shark, BU.VERTEX), ibWhale = buf(Wd.whale, BU.VERTEX), ibTurtle = buf(Wd.turtle, BU.VERTEX), ibMermaid = buf(Wd.mermaid, BU.VERTEX), ibRay = buf(Wd.ray, BU.VERTEX), ibOctopus = buf(Wd.octopus, BU.VERTEX), ibKraken = buf(Wd.kraken, BU.VERTEX), ibEel = buf(Wd.eel, BU.VERTEX), ibSerpent = buf(Wd.serpent, BU.VERTEX);
 const ibGl = buf(Wd.glints, BU.VERTEX), nGl = Wd.glints.length / 8;
 const nFish = Wd.fish.length / 8, nManta = Wd.mantas.length / 8, nJelly = Wd.jelly.length / 8, nWorm = Wd.worm.length / 8, nBub = Wd.bubbles.length / 8, nSnow = Wd.snow.length / 4;
+const nShark = Wd.shark.length / 8, nWhale = Wd.whale.length / 8, nTurtle = Wd.turtle.length / 8, nMermaid = Wd.mermaid.length / 8, nRay = Wd.ray.length / 8, nOctopus = Wd.octopus.length / 8, nKraken = Wd.kraken.length / 8, nEel = Wd.eel.length / 8, nSerpent = Wd.serpent.length / 8;
 const MANTA = meshes[12], FISH = meshes[13], JELLY = meshes[26], WORM = meshes[27];
+const TURTLE = meshes[38], SHARK = meshes[39], WHALE = meshes[40], MERMAID = meshes[41];
 Q.writeTexture({ texture: tVol }, Wd.volD, { bytesPerRow: NX, rowsPerImage: NY / 2 }, [NX / 2, NY / 2, NZ / 2]);
 Q.writeTexture({ texture: tMap }, Wd.gm, { bytesPerRow: 2048 }, [512, 512]);
 
@@ -336,7 +352,7 @@ Q.writeTexture({ texture: tMap }, Wd.gm, { bytesPerRow: 2048 }, [512, 512]);
   r.setVertexBuffer(0, vbTerrain); r.setVertexBuffer(1, ibSolids); r.setIndexBuffer(ibTerrain, 'uint32');
   r.drawIndexed(T.ib.length, 1, 0, 0, nSolid);
   r.setPipeline(pSolidSh); r.setVertexBuffer(0, vbMesh); r.setIndexBuffer(ibMesh, 'uint32');
-  for (let i = 0; i < 12; i++) { const g = Wd.solids.ranges[i]; if (g[1]) r.drawIndexed(meshes[i].ib.length, g[1], meshes[i].i0, meshes[i].v0, g[0]); }
+  for (let i = 0; i < 38; i++) { const g = Wd.solids.ranges[i]; if (g[1]) r.drawIndexed(meshes[i].ib.length, g[1], meshes[i].i0, meshes[i].v0, g[0]); }
   // small rocks, sponges and corals (~35M triangles) only on High: too much for a phone's driver
   if (!LV) for (let i = 0; i < NCHUNK; i++) { r.setVertexBuffer(1, ibChunk[i]); r.drawIndexed(meshes[14 + i].ib.length, Wd.chunks[i].n, meshes[14 + i].i0, meshes[14 + i].v0, 0); }
   if (!LV) for (let i = 0; i < 6; i++) if (Wd.props[i].n) { r.setVertexBuffer(1, ibProp[i]); r.drawIndexed(meshes[4 + i].ib.length, Wd.props[i].n, meshes[4 + i].i0, meshes[4 + i].v0, 0); }
@@ -508,7 +524,7 @@ function render() {
   r.setPipeline(pTerrain); r.setVertexBuffer(0, vbTerrain); r.setVertexBuffer(1, ibSolids); r.setIndexBuffer(ibTerrain, 'uint32');
   drawCells(r, T.start, T.lo, T.hi, 1.5, 1, 0, 0, 240);
   r.setPipeline(pSolid); r.setVertexBuffer(0, vbMesh); r.setIndexBuffer(ibMesh, 'uint32');
-  for (let i = 0; i < 12; i++) { const g = Wd.solids.ranges[i]; if (g[1]) r.drawIndexed(meshes[i].ib.length, g[1], meshes[i].i0, meshes[i].v0, g[0]); }
+  for (let i = 0; i < 38; i++) { const g = Wd.solids.ranges[i]; if (g[1]) r.drawIndexed(meshes[i].ib.length, g[1], meshes[i].i0, meshes[i].v0, g[0]); }
   for (let i = 0; i < NCHUNK; i++) {
     const c = Wd.chunks[i], big = i > 2 && i < 6; r.setVertexBuffer(1, ibChunk[i]);
     drawCells(r, c.start, c.lo, c.hi, 3, meshes[14 + i], 0, 0, i > 5 ? 30 : big ? 40 : 96);
@@ -523,6 +539,16 @@ function render() {
   r.setPipeline(pFish); r.setVertexBuffer(1, ibFish); r.drawIndexed(FISH.ib.length, nFish, FISH.i0, FISH.v0, 0);
   r.setPipeline(pJelly); r.setVertexBuffer(1, ibJelly); r.drawIndexed(JELLY.ib.length, nJelly, JELLY.i0, JELLY.v0, 0);
   r.setPipeline(pWorm); r.setVertexBuffer(1, ibWorm); r.drawIndexed(WORM.ib.length, nWorm, WORM.i0, WORM.v0, 0);
+  // Ocean City creatures (v2.0)
+  r.setPipeline(pBigFish); r.setVertexBuffer(1, ibShark); r.drawIndexed(SHARK.ib.length, nShark, SHARK.i0, SHARK.v0, 0);
+  r.setVertexBuffer(1, ibWhale); r.drawIndexed(WHALE.ib.length, nWhale, WHALE.i0, WHALE.v0, 0);
+  r.setVertexBuffer(1, ibTurtle); r.drawIndexed(TURTLE.ib.length, nTurtle, TURTLE.i0, TURTLE.v0, 0);
+  r.setPipeline(pMermaid); r.setVertexBuffer(1, ibMermaid); r.drawIndexed(MERMAID.ib.length, nMermaid, MERMAID.i0, MERMAID.v0, 0);
+  r.setPipeline(pRay); r.setVertexBuffer(1, ibRay); r.drawIndexed(MANTA.ib.length, nRay, MANTA.i0, MANTA.v0, 0);
+  r.setPipeline(pOctopus); r.setVertexBuffer(1, ibOctopus); r.drawIndexed(JELLY.ib.length, nOctopus, JELLY.i0, JELLY.v0, 0);
+  r.setPipeline(pKraken); r.setVertexBuffer(1, ibKraken); r.drawIndexed(JELLY.ib.length, nKraken, JELLY.i0, JELLY.v0, 0);
+  r.setPipeline(pEel); r.setVertexBuffer(1, ibEel); r.drawIndexed(WORM.ib.length, nEel, WORM.i0, WORM.v0, 0);
+  r.setPipeline(pSerpent); r.setVertexBuffer(1, ibSerpent); r.drawIndexed(WORM.ib.length, nSerpent, WORM.i0, WORM.v0, 0);
   // the player fish, only while swimming as it (hidden in free-camera mode and in the eye view)
   if (third && !eye) {
     r.setPipeline(pPlayer); r.setBindGroup(0, bgPlayer); r.setVertexBuffer(0, vbMesh);
@@ -592,6 +618,76 @@ const clearBoom = (px, py, pz, tx, ty, tz) => {
   let b = CAMD;
   while (b > 2 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 2: the fish is 1.6 long, a shorter boom puts the camera inside it
   return b;
+};
+
+// ---------------------------------------------------------------- Ocean City (v2.0): minimap, POIs, achievements
+// points of interest: name, x, y, z, radius (unlock when the player swims inside)
+const POIS = [
+  ['The Spire', 95, -20, 0, 15],
+  ['The Colonnade', 117, -30, 0, 8],
+  ['The Statue', 120, -25, -20, 12],
+  ['The Energy Gate', 70, -26, 20, 14],
+  ['The Crystal', 110, -20, 15, 12],
+  ['The Shipwreck', 59.5, -23, 6, 15],
+  ['The Grotto', 0, -40, 80, 15],
+  ['The Arch', 0, -45, -34, 16],
+];
+const ACH = [
+  ['spire', 'Discover the Spire'], ['colonnade', 'Discover the Colonnade'], ['statue', 'Discover the Statue'],
+  ['gate', 'Discover the Energy Gate'], ['crystal', 'Discover the Crystal'], ['wreck', 'Discover the Shipwreck'],
+  ['grotto', 'Discover the Grotto'], ['arch', 'Discover the Arch'],
+  ['swim1k', 'Swim 1 km'], ['surface', 'Touch the surface'], ['deep', 'Dive below -60'],
+  ['whale', 'Spot the whale'], ['gatepass', 'Swim through the Energy Gate'],
+  ['monster', 'Swim near a giant monster'], ['all', 'Find every place'],
+];
+let achSet = new Set();
+try { for (const a of JSON.parse(localStorage.lightwaterAch || '[]')) achSet.add(a); } catch {}
+const achEl = $('ach');
+const achList = () => { achEl.innerHTML = ACH.map(([id, label]) => `<p class="${achSet.has(id) ? 'on' : ''}">${achSet.has(id) ? '✓' : '·'} ${label}</p>`).join(''); };
+achList();
+let toastT = 0;
+const toast = (s) => { const t = $('toast'); t.textContent = s; t.className = 'show'; clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 3200); };
+const unlock = (id, msg) => {
+  if (achSet.has(id)) return;
+  achSet.add(id);
+  try { localStorage.lightwaterAch = JSON.stringify([...achSet]); } catch {}
+  achList();
+  toast(msg);
+};
+// the minimap: a small 2D canvas, top-right, showing rocks, the city, POIs and the player
+const mm = $('mm'), mx = mm.getContext('2d');
+const mapXY = (x, z) => [80 + x * 160 / 340, 80 + z * 160 / 340];
+const drawMap = () => {
+  const c = mx; c.clearRect(0, 0, 160, 160);
+  c.fillStyle = '#03131cb3'; c.beginPath(); c.arc(80, 80, 78, 0, 7); c.fill();
+  c.strokeStyle = '#7ff3ff33'; c.stroke();
+  c.strokeStyle = '#8fa8b366'; c.lineCap = 'round';
+  for (const m of Wd.map) { const [x0, y0] = mapXY(m[0], m[1]), [x1, y1] = mapXY(m[2], m[3]); c.lineWidth = max(2, m[4] * 160 / 340 * 2); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+  const [cx, cy] = mapXY(95, 0); c.strokeStyle = '#19c3d6'; c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, 35 * 160 / 340, 0, 7); c.stroke();
+  for (let i = 0; i < POIS.length; i++) { const [x, y] = mapXY(POIS[i][1], POIS[i][3]); c.fillStyle = achSet.has(ACH[i][0]) ? '#ffd24d' : '#19c3d6'; c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); }
+  const px = third ? F[PX] : F[CX], pz = third ? F[PZ] : F[CZ], yaw = third ? F[PYAW] : F[YAW];
+  const [qx, qy] = mapXY(px, pz);
+  c.fillStyle = '#ffd24d'; c.beginPath(); c.arc(qx, qy, 4, 0, 7); c.fill();
+  c.strokeStyle = '#ffd24d'; c.lineWidth = 2; c.beginPath(); c.moveTo(qx, qy); c.lineTo(qx + sin(yaw) * 10, qy - cos(yaw) * 10); c.stroke();
+};
+// POI + achievement checks, throttled to about 4 times a second
+let chkT = 0, prevPX = 0, prevPY = 0, prevPZ = 0, distSwum = 0;
+const checkPOIs = (dt) => {
+  chkT += dt; if (chkT < 0.25) return; chkT = 0;
+  const px = third ? F[PX] : F[CX], py = third ? F[PY] : F[CY], pz = third ? F[PZ] : F[CZ];
+  if (prevPX || prevPY || prevPZ) distSwum += sqrt((px - prevPX) ** 2 + (py - prevPY) ** 2 + (pz - prevPZ) ** 2);
+  prevPX = px; prevPY = py; prevPZ = pz;
+  const d3 = (x, y, z) => sqrt((px - x) ** 2 + (py - y) ** 2 + (pz - z) ** 2);
+  const poiIds = ['spire', 'colonnade', 'statue', 'gate', 'crystal', 'wreck', 'grotto', 'arch'];
+  for (let i = 0; i < POIS.length; i++) if (d3(POIS[i][1], POIS[i][2], POIS[i][3]) < POIS[i][4]) unlock(poiIds[i], 'Discovered: ' + POIS[i][0]);
+  if (distSwum > 1000) unlock('swim1k', 'Achievement: swam 1 km');
+  if (py > -2) unlock('surface', 'Achievement: touched the surface');
+  if (py < -60) unlock('deep', 'Achievement: dived below -60');
+  for (let i = 0; i < nWhale - 1; i++) { const o = i * 8; const dx = px - Wd.whale[o], dz = pz - Wd.whale[o + 2]; if (abs(sqrt(dx * dx + dz * dz) - Wd.whale[o + 3]) < 15 && abs(py - Wd.whale[o + 1]) < 12) unlock('whale', 'Achievement: spotted the whale'); }
+  if (d3(70, -26, 20) < 8) unlock('gatepass', 'Achievement: swam through the Energy Gate');
+  const near = (arr, i) => { const o = i * 8; const dx = px - arr[o], dz = pz - arr[o + 2]; return sqrt(dx * dx + dz * dz) < arr[o + 3] + 25 && abs(py - arr[o + 1]) < 20; };
+  if (near(Wd.whale, 2) || near(Wd.serpent, 0) || near(Wd.kraken, 0)) unlock('monster', 'Achievement: swam near a giant monster');
+  if (poiIds.every((id) => achSet.has(id))) unlock('all', 'Achievement: found every place');
 };
 
 let autoT = 0, autoN = 0, autoSum = 0; // auto detail: rolling frame-time window
@@ -701,6 +797,8 @@ function frame(now) {
     }
   }
   render();
+  drawMap();
+  checkPOIs(dt);
   if (hud) {
     hN++; if (dtr > hMax) hMax = dtr; if (dtr < hMin) hMin = dtr; if (dtr > hPer * 1.5) { hLate++; hTot++; }
     F[HUDT] += dtr / 1000;
