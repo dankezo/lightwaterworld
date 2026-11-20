@@ -128,6 +128,8 @@ const pOctopus = scenePipe(mAnim, 'vsJelly', 'fsOctopus', [vbSolid, ibAnim]);
 const pKraken = scenePipe(mAnim, 'vsJelly', 'fsKraken', [vbSolid, ibAnim]);
 const pEel = scenePipe(mAnim, 'vsWorm', 'fsEel', [vbSolid, ibAnim]);
 const pSerpent = scenePipe(mAnim, 'vsWorm', 'fsSerpent', [vbSolid, ibAnim]);
+const pAngler = scenePipe(mAnim, 'vsFish', 'fsAngler', [vbSolid, ibAnim]); // v2.7: anglerfish
+const pPlesio = scenePipe(mAnim, 'vsWorm', 'fsPlesio', [vbSolid, ibAnim]); // v2.7: plesiosaurus
 // player fish: its own module and layout (G uniform + player uniform), reusing the fish mesh
 const bglPlayer = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, buffer: {} }] });
 const plPlayer = device.createPipelineLayout({ bindGroupLayouts: [bglPlayer] });
@@ -207,12 +209,12 @@ let D;
 }
 // Distance to the rock for collide(), in 1/127 m (> 0 in rock, clamped to ±1 m), kept only in the 4x4x4-voxel
 // bricks near the surface within the camera's reach (~2 MB). CI per brick: 0 all water, 1 all rock, n brick n-2 in CG.
-const CO = 52, CN = 102, CI = new Uint16Array(CN * CN * NY / 4);
-let CG = new Int8Array(64 * 65534);
+const CO = 8, CN = 124, CI = new Uint16Array(CN * CN * NY / 4);
+let CG = new Int8Array(64 * 131072);
 {
   let n = 0;
   for (let bz = 0; bz < CN; bz++) for (let by = 1; by < NY / 4 - 1; by++) for (let bx = 0; bx < CN; bx++) {
-    if (hypot(bx - CN / 2 + 0.5, bz - CN / 2 + 0.5) > 52) continue; // more than 156 m out: never reached
+    if (hypot(bx - CN / 2 + 0.5, bz - CN / 2 + 0.5) > 62) continue; // more than 186 m out: never reached
     let lo = 127, hi = -127;
     for (let z = 0; z < 4; z++) for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
       const i = CO + bx * 4 + x + NX * (by * 4 + y + NY * (CO + bz * 4 + z)), gz = D[i + NX * NY] - D[i - NX * NY];
@@ -321,6 +323,8 @@ meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().bui
 meshes.push(meshTower().build(), meshColumn().build(), meshDome().build(), meshGate().build(), meshCrystal().build(), meshStatue().build(), meshPlaza().build(), meshRune().build(), meshConduit().build(), meshArc().build());
 // Ocean City creatures (v2.0): ids 38-41 (turtle, shark, whale, mermaid)
 meshes.push(meshTurtle().build(), meshShark().build(), meshWhale().build(), meshMermaid().build());
+// Ocean City v2.7: ids 42-43 (anglerfish, plesiosaurus - real low-poly models, Gobkit CC0)
+meshes.push(meshAngler().build(), meshPlesio().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
 const allV = new Uint8Array(nV * 16), allI = new Uint32Array(nI);
@@ -333,12 +337,13 @@ const ibSolids = buf(solidData, BU.VERTEX);
 const ibChunk = Wd.chunks.map((c) => buf(c.data, BU.VERTEX)), ibProp = Wd.props.map((c) => buf(c.data, BU.VERTEX));
 const ibBig = buf(new Uint8Array(Wd.big.buf), BU.VERTEX), ibBigF = buf(new Uint8Array(Wd.bigF.buf), BU.VERTEX), ibSmall = buf(new Uint8Array(Wd.small.buf), BU.VERTEX);
 const ibFish = buf(Wd.fish, BU.VERTEX), ibManta = buf(Wd.mantas, BU.VERTEX), ibJelly = buf(Wd.jelly, BU.VERTEX), ibWorm = buf(Wd.worm, BU.VERTEX), ibBubbles = buf(Wd.bubbles, BU.VERTEX), ibSnowB = buf(Wd.snow, BU.VERTEX);
-const ibShark = buf(Wd.shark, BU.VERTEX), ibWhale = buf(Wd.whale, BU.VERTEX), ibTurtle = buf(Wd.turtle, BU.VERTEX), ibMermaid = buf(Wd.mermaid, BU.VERTEX), ibRay = buf(Wd.ray, BU.VERTEX), ibOctopus = buf(Wd.octopus, BU.VERTEX), ibKraken = buf(Wd.kraken, BU.VERTEX), ibEel = buf(Wd.eel, BU.VERTEX), ibSerpent = buf(Wd.serpent, BU.VERTEX);
+const ibShark = buf(Wd.shark, BU.VERTEX), ibWhale = buf(Wd.whale, BU.VERTEX), ibTurtle = buf(Wd.turtle, BU.VERTEX), ibMermaid = buf(Wd.mermaid, BU.VERTEX), ibRay = buf(Wd.ray, BU.VERTEX), ibOctopus = buf(Wd.octopus, BU.VERTEX), ibKraken = buf(Wd.kraken, BU.VERTEX), ibEel = buf(Wd.eel, BU.VERTEX), ibSerpent = buf(Wd.serpent, BU.VERTEX), ibAngler = buf(Wd.angler, BU.VERTEX), ibPlesio = buf(Wd.plesio, BU.VERTEX);
 const ibGl = buf(Wd.glints, BU.VERTEX), nGl = Wd.glints.length / 8;
 const nFish = Wd.fish.length / 8, nManta = Wd.mantas.length / 8, nJelly = Wd.jelly.length / 8, nWorm = Wd.worm.length / 8, nBub = Wd.bubbles.length / 8, nSnow = Wd.snow.length / 4;
-const nShark = Wd.shark.length / 8, nWhale = Wd.whale.length / 8, nTurtle = Wd.turtle.length / 8, nMermaid = Wd.mermaid.length / 8, nRay = Wd.ray.length / 8, nOctopus = Wd.octopus.length / 8, nKraken = Wd.kraken.length / 8, nEel = Wd.eel.length / 8, nSerpent = Wd.serpent.length / 8;
+const nShark = Wd.shark.length / 8, nWhale = Wd.whale.length / 8, nTurtle = Wd.turtle.length / 8, nMermaid = Wd.mermaid.length / 8, nRay = Wd.ray.length / 8, nOctopus = Wd.octopus.length / 8, nKraken = Wd.kraken.length / 8, nEel = Wd.eel.length / 8, nSerpent = Wd.serpent.length / 8, nAngler = Wd.angler.length / 8, nPlesio = Wd.plesio.length / 8;
 const MANTA = meshes[12], FISH = meshes[13], JELLY = meshes[26], WORM = meshes[27];
 const TURTLE = meshes[38], SHARK = meshes[39], WHALE = meshes[40], MERMAID = meshes[41];
+const ANGLER = meshes[42], PLESIO = meshes[43];
 Q.writeTexture({ texture: tVol }, Wd.volD, { bytesPerRow: NX, rowsPerImage: NY / 2 }, [NX / 2, NY / 2, NZ / 2]);
 Q.writeTexture({ texture: tMap }, Wd.gm, { bytesPerRow: 2048 }, [512, 512]);
 
@@ -431,23 +436,8 @@ if (hasTS) {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false, third = true, eye = true; // the only swimming view is the fish eye (first person); false: the original free camera
-// V switches between the fish eye and the free camera. To the eye: put the fish
-// just ahead of the camera with the camera heading, so it swims where it looks.
-// To free camera: keep the current view, stop drifting.
-function toggleView() {
-  F[VX] = F[VY] = F[VZ] = 0;
-  if (!third) {
-    // free camera -> back to the fish eye
-    third = true; eye = true;
-    const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
-    F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
-    F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0;
-  } else {
-    // the fish eye -> free camera
-    third = false; eye = false;
-  }
-}
+let hud = false, third = false, eye = false; // god mode only: the camera flies free, no fish; the 1-6 keys jump to viewpoints
+// (no V toggle: god mode is the only view; the 1-6 keys jump to viewpoints)
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
 const TANH = 0.6, NEAR = 0.1, EXPO = 0.74, RAYS = 0.70;
 const submitList = [null];
@@ -543,12 +533,10 @@ function render() {
   r.setPipeline(pKraken); r.setVertexBuffer(1, ibKraken); r.drawIndexed(JELLY.ib.length, nKraken, JELLY.i0, JELLY.v0, 0);
   r.setPipeline(pEel); r.setVertexBuffer(1, ibEel); r.drawIndexed(WORM.ib.length, nEel, WORM.i0, WORM.v0, 0);
   r.setPipeline(pSerpent); r.setVertexBuffer(1, ibSerpent); r.drawIndexed(WORM.ib.length, nSerpent, WORM.i0, WORM.v0, 0);
-  // the player fish, only while swimming as it (hidden in free-camera mode and in the eye view)
-  if (third && !eye) {
-    r.setPipeline(pPlayer); r.setBindGroup(0, bgPlayer); r.setVertexBuffer(0, vbMesh);
-    r.drawIndexed(FISH.ib.length, 1, FISH.i0, FISH.v0, 0);
-  }
-  r.setBindGroup(0, bg0); // the player fish uses its own layout: put the scene group back for the kelp on down
+  r.setPipeline(pAngler); r.setVertexBuffer(1, ibAngler); r.drawIndexed(ANGLER.ib.length, nAngler, ANGLER.i0, ANGLER.v0, 0); // v2.7
+  r.setPipeline(pPlesio); r.setVertexBuffer(1, ibPlesio); r.drawIndexed(PLESIO.ib.length, nPlesio, PLESIO.i0, PLESIO.v0, 0); // v2.7
+  // (no player fish in god mode: the camera is the player, nothing to draw here)
+  r.setBindGroup(0, bg0); // put the scene group back for the kelp on down
   // kelp and plants: 9-row blades up close, 5 rows mid-range, a decimated set far away
   r.setPipeline(pLeaf); r.setVertexBuffer(0, ibBig); drawCells(r, Wd.big.start, Wd.big.lo, Wd.big.hi, 5, false, 18, 0, 24);
   r.setPipeline(pLeaf5); drawCells(r, Wd.big.start, Wd.big.lo, Wd.big.hi, 5, false, 10, 24, 58);
@@ -589,12 +577,7 @@ function sd(j) {
 // Moves the camera by F[MX..MZ] in steps shorter than its radius CR (so it can't pass through thin rock), pushing it
 // back out after each step and dropping velocity into the rock, so it slides along.
 const CR = 0.5;
-// the surface the fish last touched, for sliding: collide() stores the rock normal here, and the
-// fish movement projects its target velocity onto that surface so it slides along the rock
-// instead of pushing into it and stopping (the kinematic character-controller pattern)
-let hitNx = 0, hitNy = 0, hitNz = 0, hit = false;
 function collide() {
-  hit = false;
   const n = floor(sqrt(F[MX] * F[MX] + F[MY] * F[MY] + F[MZ] * F[MZ]) / 0.4) + 1;
   for (let i = 0; i < n; i++) {
     F[CX] += F[MX] / n; F[CY] += F[MY] / n; F[CZ] += F[MZ] / n;
@@ -605,7 +588,7 @@ function collide() {
       if (l < 0.075) break; // flat: deep in rock
       gx /= l; gy /= l; gz /= l; const vn = F[VX] * gx + F[VY] * gy + F[VZ] * gz;
       F[CX] -= gx * s; F[CY] -= gy * s; F[CZ] -= gz * s;
-      if (vn > 0) { F[VX] -= gx * vn; F[VY] -= gy * vn; F[VZ] -= gz * vn; hitNx = gx; hitNy = gy; hitNz = gz; hit = true; }
+      if (vn > 0) { F[VX] -= gx * vn; F[VY] -= gy * vn; F[VZ] -= gz * vn; }
     }
   }
 }
@@ -622,11 +605,20 @@ const POIS = [
   ['The Shipwreck', 59.5, -23, 6, 15],
   ['The Grotto', 0, -40, 80, 15],
   ['The Arch', 0, -45, -34, 16],
+  // v2.7: the Abyssal District and the Leviathan Deep
+  ['The Abyssal Spire', -130, -20, -120, 15],
+  ['The Sunken Colonnade', -108, -30, -120, 8],
+  ['The Deep Statue', -105, -25, -140, 12],
+  ['The Abyss Gate', -155, -26, -100, 14],
+  ['The Void Crystal', -115, -20, -105, 12],
+  ['The Leviathan Deep', -100, -35, -80, 18],
 ];
 const ACH = [
   ['spire', 'Discover the Spire'], ['colonnade', 'Discover the Colonnade'], ['statue', 'Discover the Statue'],
   ['gate', 'Discover the Energy Gate'], ['crystal', 'Discover the Crystal'], ['wreck', 'Discover the Shipwreck'],
   ['grotto', 'Discover the Grotto'], ['arch', 'Discover the Arch'],
+  ['aspire', 'Discover the Abyssal Spire'], ['acolonnade', 'Discover the Sunken Colonnade'], ['astatue', 'Discover the Deep Statue'],
+  ['agate', 'Discover the Abyss Gate'], ['acrystal', 'Discover the Void Crystal'], ['levdeep', 'Discover the Leviathan Deep'],
   ['swim1k', 'Swim 1 km'], ['surface', 'Touch the surface'], ['deep', 'Dive below -60'],
   ['whale', 'Spot the whale'], ['gatepass', 'Swim through the Energy Gate'],
   ['monster', 'Swim near a giant monster'], ['all', 'Find every place'],
@@ -647,14 +639,15 @@ const unlock = (id, msg) => {
 };
 // the minimap: a small 2D canvas, top-right, showing rocks, the city, POIs and the player
 const mm = $('mm'), mx = mm.getContext('2d');
-const mapXY = (x, z) => [80 + x * 160 / 340, 80 + z * 160 / 340];
+const mapXY = (x, z) => [80 + x * 160 / 360, 80 + z * 160 / 360];
 const drawMap = () => {
   const c = mx; c.clearRect(0, 0, 160, 160);
   c.fillStyle = '#03131cb3'; c.beginPath(); c.arc(80, 80, 78, 0, 7); c.fill();
   c.strokeStyle = '#7ff3ff33'; c.stroke();
   c.strokeStyle = '#8fa8b366'; c.lineCap = 'round';
-  for (const m of Wd.map) { const [x0, y0] = mapXY(m[0], m[1]), [x1, y1] = mapXY(m[2], m[3]); c.lineWidth = max(2, m[4] * 160 / 340 * 2); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
-  const [cx, cy] = mapXY(95, 0); c.strokeStyle = '#19c3d6'; c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, 35 * 160 / 340, 0, 7); c.stroke();
+  for (const m of Wd.map) { const [x0, y0] = mapXY(m[0], m[1]), [x1, y1] = mapXY(m[2], m[3]); c.lineWidth = max(2, m[4] * 160 / 360 * 2); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+  const [cx, cy] = mapXY(95, 0); c.strokeStyle = '#19c3d6'; c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, 35 * 160 / 360, 0, 7); c.stroke();
+  const [ax, ay] = mapXY(-130, -120); c.strokeStyle = '#b07cff'; c.beginPath(); c.arc(ax, ay, 35 * 160 / 360, 0, 7); c.stroke(); // v2.7: the Abyssal District
   for (let i = 0; i < POIS.length; i++) { const [x, y] = mapXY(POIS[i][1], POIS[i][3]); c.fillStyle = achSet.has(ACH[i][0]) ? '#ffd24d' : '#19c3d6'; c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); }
   const px = third ? F[PX] : F[CX], pz = third ? F[PZ] : F[CZ], yaw = third ? F[PYAW] : F[YAW];
   const [qx, qy] = mapXY(px, pz);
@@ -669,15 +662,15 @@ const checkPOIs = (dt) => {
   if (prevPX || prevPY || prevPZ) distSwum += sqrt((px - prevPX) ** 2 + (py - prevPY) ** 2 + (pz - prevPZ) ** 2);
   prevPX = px; prevPY = py; prevPZ = pz;
   const d3 = (x, y, z) => sqrt((px - x) ** 2 + (py - y) ** 2 + (pz - z) ** 2);
-  const poiIds = ['spire', 'colonnade', 'statue', 'gate', 'crystal', 'wreck', 'grotto', 'arch'];
+  const poiIds = ['spire', 'colonnade', 'statue', 'gate', 'crystal', 'wreck', 'grotto', 'arch', 'aspire', 'acolonnade', 'astatue', 'agate', 'acrystal', 'levdeep'];
   for (let i = 0; i < POIS.length; i++) if (d3(POIS[i][1], POIS[i][2], POIS[i][3]) < POIS[i][4]) unlock(poiIds[i], 'Discovered: ' + POIS[i][0]);
   if (distSwum > 1000) unlock('swim1k', 'Achievement: swam 1 km');
   if (py > -2) unlock('surface', 'Achievement: touched the surface');
   if (py < -60) unlock('deep', 'Achievement: dived below -60');
-  for (let i = 0; i < nWhale - 1; i++) { const o = i * 8; const dx = px - Wd.whale[o], dz = pz - Wd.whale[o + 2]; if (abs(sqrt(dx * dx + dz * dz) - Wd.whale[o + 3]) < 15 && abs(py - Wd.whale[o + 1]) < 12) unlock('whale', 'Achievement: spotted the whale'); }
+  for (let i = 0; i < nWhale; i++) { if (Wd.whale[i * 8 + 4] >= 0.75) continue; const o = i * 8; const dx = px - Wd.whale[o], dz = pz - Wd.whale[o + 2]; if (abs(sqrt(dx * dx + dz * dz) - Wd.whale[o + 3]) < 15 && abs(py - Wd.whale[o + 1]) < 12) unlock('whale', 'Achievement: spotted the whale'); }
   if (d3(70, -26, 20) < 8) unlock('gatepass', 'Achievement: swam through the Energy Gate');
   const near = (arr, i) => { const o = i * 8; const dx = px - arr[o], dz = pz - arr[o + 2]; return sqrt(dx * dx + dz * dz) < arr[o + 3] + 25 && abs(py - arr[o + 1]) < 20; };
-  if (near(Wd.whale, 2) || near(Wd.serpent, 0) || near(Wd.kraken, 0)) unlock('monster', 'Achievement: swam near a giant monster');
+  if (near(Wd.whale, 2) || near(Wd.whale, 3) || near(Wd.whale, 4) || near(Wd.whale, 5) || near(Wd.serpent, 0) || near(Wd.serpent, 1) || near(Wd.serpent, 2) || near(Wd.kraken, 0) || near(Wd.kraken, 1) || near(Wd.kraken, 2) || near(Wd.angler, 0) || near(Wd.angler, 1) || near(Wd.angler, 2) || near(Wd.plesio, 0) || near(Wd.plesio, 1)) unlock('monster', 'Achievement: swam near a giant monster');
   if (poiIds.every((id) => achSet.has(id))) unlock('all', 'Achievement: found every place');
 };
 
@@ -737,50 +730,16 @@ function frame(now) {
     const ax = lkx * kq, ay = lky * kq; lkx -= ax; lky -= ay; l2x += ax; l2y += ay;
     const dyw = l2x * kq, dpt = l2y * kq; l2x -= dyw; l2y -= dpt;
     const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 4.5), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd;
-    if (third) {
-      // third-person: the deltas steer the fish heading, the fish banks into turns, the camera trails behind
-      F[PYAW] += dyw;
-      let pp = F[PPIT] - dpt; pp = pp < -1.55 ? -1.55 : pp > 1.55 ? 1.55 : pp; F[PPIT] = pp; // mouse pitches the fish through the full 180 degrees in front, straight down to straight up
-      const turn = dt > 0 ? dyw / dt : 0;
-      let rt = -turn * 0.12; rt = rt < -0.6 ? -0.6 : rt > 0.6 ? 0.6 : rt;
-      F[PROLL] += (rt - F[PROLL]) * (1 - exp(-dt * 6));
-      const cp = cos(pp), sy = sin(F[PYAW]), cw = cos(F[PYAW]), syp = sin(pp);
-      const tx = sy * cp, ty = syp, tz = -cw * cp, rx = cw, rz = sy;
-      let tvx = (tx * mf + rx * mr * 0.6) * sp, tvy = (ty * mf + mu * 0.6) * sp, tvz = (tz * mf + rz * mr * 0.6) * sp;
-      // slide along the rock: when the last step touched a surface, drop the part of the
-      // target velocity that pushes into it, so holding W toward a rock glides along it
-      if (hit) { const vn = tvx * hitNx + tvy * hitNy + tvz * hitNz; if (vn > 0) { tvx -= hitNx * vn; tvy -= hitNy * vn; tvz -= hitNz * vn; } }
-      const vx = F[VX] + (tvx - F[VX]) * k, vy = F[VY] + (tvy - F[VY]) * k, vz = F[VZ] + (tvz - F[VZ]) * k;
-      F[VX] = vx; F[VY] = vy; F[VZ] = vz;
-      // swim the fish through the same rock-collision stepper the camera uses
-      F[CX] = F[PX]; F[CY] = F[PY]; F[CZ] = F[PZ];
-      F[MX] = vx * dt; F[MY] = vy * dt; F[MZ] = vz * dt;
-      collide();
-      let px = F[CX], py = F[CY], pz = F[CZ];
-      const rad = sqrt(px * px + pz * pz); if (rad > 150) { px *= 150 / rad; pz *= 150 / rad; }
-      py = py < -52 ? -52 : py > -1.2 ? -1.2 : py;
-      F[PX] = px; F[PY] = py; F[PZ] = pz;
-      const spd = sqrt(vx * vx + vy * vy + vz * vz);
-      F[PWAG] += dt * (4 + spd * 1.1);
-      // the fish eye: the camera is the eye itself, looking where the fish looks; the fish model is hidden, so the view is always clear
-      F[CX] = px + tx * 0.8; F[CY] = py + ty * 0.8 + 0.15; F[CZ] = pz + tz * 0.8;
-      F[YAW] = F[PYAW]; F[PIT] = pp;
-      // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
-      PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
-      PL[4] = F[PYAW]; PL[5] = pp; PL[6] = F[PROLL]; PL[7] = 0;
-      PL[8] = F[PWAG]; PL[9] = spd < 4 ? 0.15 : spd > 26 ? 1 : spd / 26;
-      Q.writeBuffer(uboPlayer, 0, PL);
-    } else {
-      // free camera: the original movement
-      const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
-      const cp = cos(pitch), sy = sin(yaw), cw = cos(yaw);
-      const vx = F[VX] + ((sy * cp * mf + cw * mr) * sp - F[VX]) * k, vy = F[VY] + ((sin(pitch) * mf + mu) * sp - F[VY]) * k, vz = F[VZ] + ((-cw * cp * mf + sy * mr) * sp - F[VZ]) * k;
-      let x = F[CX] + vx * dt, y = F[CY] + vy * dt, z = F[CZ] + vz * dt;
-      const rad = sqrt(x * x + z * z); if (rad > 150) { x *= 150 / rad; z *= 150 / rad; }
-      y = y < -52 ? -52 : y > -1.2 ? -1.2 : y;
-      F[YAW] = yaw; F[PIT] = pitch; F[VX] = vx; F[VY] = vy; F[VZ] = vz; F[MX] = x - F[CX]; F[MY] = y - F[CY]; F[MZ] = z - F[CZ];
-      collide();
-    }
+    // god mode: the camera flies free, 360 degrees, no fish. WASD moves where it looks, mouse steers,
+    // Space/E rise, Q dives, Shift is faster; the rock-collision stepper keeps it out of rock
+    const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
+    const cp = cos(pitch), sy = sin(yaw), cw = cos(yaw);
+    const vx = F[VX] + ((sy * cp * mf + cw * mr) * sp - F[VX]) * k, vy = F[VY] + ((sin(pitch) * mf + mu) * sp - F[VY]) * k, vz = F[VZ] + ((-cw * cp * mf + sy * mr) * sp - F[VZ]) * k;
+    let x = F[CX] + vx * dt, y = F[CY] + vy * dt, z = F[CZ] + vz * dt;
+    const rad = sqrt(x * x + z * z); if (rad > 180) { x *= 180 / rad; z *= 180 / rad; }
+    y = y < -52 ? -52 : y > -1.2 ? -1.2 : y;
+    F[YAW] = yaw; F[PIT] = pitch; F[VX] = vx; F[VY] = vy; F[VZ] = vz; F[MX] = x - F[CX]; F[MY] = y - F[CY]; F[MZ] = z - F[CZ];
+    collide();
   }
   render();
   drawMap();
@@ -800,7 +759,6 @@ const key = (e, v) => {
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
-      else if (e.code === 'KeyV') toggleView();
       else if (e.code === 'Escape') ui(true);
       else if (e.code >= 'Digit1' && e.code <= 'Digit6') { third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[e.code.charCodeAt(5) - 49]); }
     }

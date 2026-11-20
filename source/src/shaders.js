@@ -58,7 +58,7 @@ fn dens(p: vec3f) -> f32 {
   }
   let rad = length(p.xz) + w.x * 14.;
   let n = fbm(vec3f(q.xz * .0125, 1.7), 4);
-  let ring = ss(156., 172., rad);
+  let ring = ss(180., 192., rad);
   let plat = max(ss(.5, .565, n) * (1. - clr), ring);
   let th = g0 + plat * mix(26. + 17. * fbm(vec3f(q.xz * .03, 5.), 2), 60., ring);
   var d = smax(g0 + 4.5 * ss(10., 0., de) - p.y, dm, 3.);
@@ -687,7 +687,7 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   c += vec3f(1., .08, .05) * eye * 2.2;
   return fin(fog(c, i.wp, z));
 }
-// Ocean City big fish (vsFish): the seed picks the kind - shark .0-.25, whale .25-.5, turtle .5-.75, leviathan .75-1
+// Ocean City big fish (vsFish): the seed picks the kind - shark .0-.25, whale .25-.5, turtle .5-.75, leviathan .75-.9, void leviathan .9-1
 @fragment fn fsBigFish(i: VO) -> @location(0) vec4f {
   let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
   let z = zone(i.wp); let vv = vol(i.wp);
@@ -707,12 +707,18 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
     alb = mix(vec3f(.35, .45, .2), vec3f(.75, .7, .5), ss(.1, -.1, i.op.y));
     let sc = step(fract(i.op.x * 5. + i.op.y * 3.), .5);
     alb = mix(alb, vec3f(.2, .28, .12), sc * .3 * step(0., i.op.y));
-  } else {
+  } else if (i.sd < .9) {
     // leviathan: near-black with ember-red cracks and a cold glow
     alb = vec3f(.06, .05, .08);
     let cr = ss(.45, .5, fract(i.op.x * 4. + i.op.y * 6.));
     alb = mix(alb, vec3f(.5, .08, .03), cr * .7);
     glow = vec3f(.9, .15, .05) * cr * (.8 + .4 * sin(g.cam.w * 2. + i.sd * 40.));
+  } else {
+    // void leviathan (v2.7): pale white-violet with violet cracks and a cold violet glow
+    alb = vec3f(.75, .72, .85);
+    let cr = ss(.45, .5, fract(i.op.x * 4. + i.op.y * 6.));
+    alb = mix(alb, vec3f(.45, .3, .75), cr * .7);
+    glow = vec3f(.55, .35, .95) * cr * (.8 + .4 * sin(g.cam.w * 2. + i.sd * 40.));
   }
   let E = sunE(i.wp.y, z) * i.lt;
   var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
@@ -814,6 +820,36 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   c += vec3f(.3, 1., .4) * strip * 1.8;
   let eye = step(.5, 1. - seg) * step(i.op.x, .04) * ss(.16, .22, i.op.y) * ss(.06, .12, abs(i.op.z)) * (1. - ss(.2, .26, abs(i.op.z)));
   c += vec3f(1., .2, .05) * eye * 3.;
+  return fin(fog(c, i.wp, z));
+}
+// v2.7 anglerfish (vsFish, meshAngler - Gobkit CC0): near-black abyssal body, pale belly, a glowing lure
+// on top of the head (op.x > .1, op.y > .24) and two glowing eyes on the sides of the head
+@fragment fn fsAngler(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  var alb = mix(vec3f(.05, .06, .10), vec3f(.35, .38, .42), ss(.05, -.25, i.op.y));
+  let E = sunE(i.wp.y, z) * i.lt;
+  var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
+  c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.2 + vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25 * vv.g;
+  let lure = ss(.05, .15, i.op.x) * ss(.22, .27, i.op.y);
+  c += vec3f(1., .75, .25) * lure * (2. + .8 * sin(g.cam.w * 3. + i.sd * 30.));
+  let eye = ss(.38, .44, i.op.x) * ss(.08, .14, i.op.y) * ss(.15, .22, abs(i.op.z)) * (1. - ss(.30, .36, abs(i.op.z)));
+  c += vec3f(.4, 1., .6) * eye * 2.5;
+  return fin(fog(c, i.wp, z));
+}
+// v2.7 plesiosaurus (vsWorm, meshPlesio - Gobkit CC0): a long-necked sea serpent, dark teal with a pale
+// belly, a glowing dorsal stripe and burning eyes on the head (op.x > 2.5, op.y .55-1.0)
+@fragment fn fsPlesio(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  var alb = mix(vec3f(.04, .14, .11), vec3f(.55, .6, .5), ss(.1, -.6, i.op.y));
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.1);
+  c += E * pow(sat(dot(n, normalize(V + L))), 40.) * 1.2;
+  let strip = ss(.6, .9, i.op.y);
+  c += vec3f(.2, .9, .7) * strip * 1.6;
+  let eye = ss(2.5, 2.7, i.op.x) * ss(.55, .7, i.op.y) * ss(.2, .35, abs(i.op.z)) * (1. - ss(.6, .75, abs(i.op.z)));
+  c += vec3f(1., .25, .05) * eye * 3.;
   return fin(fog(c, i.wp, z));
 }
 `;
