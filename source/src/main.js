@@ -568,6 +568,7 @@ function collide() {
   }
 }
 
+let autoT = 0, autoN = 0, autoSum = 0; // auto detail: rolling frame-time window
 function frame(now) {
   requestAnimationFrame(frame);
   const dtr = now - F[LAST]; F[LAST] = now;
@@ -587,9 +588,22 @@ function frame(now) {
       const end = k < 1 ? (det > DETMIN ? mid : PIXMIN) : det < 1 ? mid : top;
       pix *= k; if (k < 1 ? pix < end : pix > end) pix = end;
     } else { det *= sqrt(k); det = det < DETMIN ? DETMIN : det > 1 ? 1 : det; }
-    if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det]); // nothing kept at full resolution
+    if (was !== pix + det) keep('abyssal', [LV, pix < top ? pix | 0 : '', det, AUTO ? '1' : '0']); // nothing kept at full resolution
     dynN = dynT = dynG = dynGN = 0; resize();
   }
+  // Auto detail (starts at High): once the dynamic resolution is already at its floor and the game still runs
+  // slow for a while, drop a level and reload, keeping the fish where it was. Only while actually playing.
+  if (AUTO && LV < 2 && !menu && F[TIME] > 15) {
+    autoT += dtr; autoN++; autoSum += dtr;
+    if (autoT > 6000) {
+      if (autoSum / autoN > 24 && pix <= PIXMIN && det <= DETMIN) {
+        keep('abyssalPos', [F[PX], F[PY], F[PZ], F[PYAW], F[PPIT]].join(','));
+        keep('abyssal', [LV + 1, '', '', '1']); // drop a level; pixels and draw distance start fresh
+        location.reload();
+      }
+      autoT = autoN = autoSum = 0;
+    }
+  } else { autoT = autoN = autoSum = 0; }
   F[TIME] += dt;
   {
     // touch: holding the finger away from where it went down keeps turning, like a joystick
@@ -626,10 +640,10 @@ function frame(now) {
       F[PWAG] += dt * (4 + spd * 1.1);
       // camera follows behind the fish with lag, looking a little ahead of it
       const kc = 1 - exp(-dt * 5);
-      F[CX] += (px - tx * 2.2 - F[CX]) * kc;
-      F[CY] += (py - ty * 2.2 + 0.7 - F[CY]) * kc;
-      F[CZ] += (pz - tz * 2.2 - F[CZ]) * kc;
-      const lx = px + tx * 1.5 - F[CX], ly = py + ty * 1.5 - F[CY], lz = pz + tz * 1.5 - F[CZ];
+      F[CX] += (px - tx * 4.6 - F[CX]) * kc;
+      F[CY] += (py - ty * 4.6 + 1.1 - F[CY]) * kc;
+      F[CZ] += (pz - tz * 4.6 - F[CZ]) * kc;
+      const lx = px + tx * 2 - F[CX], ly = py + ty * 2 - F[CY], lz = pz + tz * 2 - F[CZ];
       F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
       // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
       PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
@@ -674,8 +688,19 @@ const key = (e, v) => {
 addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = 0; tId = -1; tN = 0; };
-const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
-canvas.addEventListener('click', capture);
+// Pointer lock, made to survive the browser's own behaviour: after Esc exits the lock Chrome refuses a fresh
+// request for about 1.25 s, so a failed request is retried after the cooldown instead of leaving the game in a
+// half-open state (menu hidden, mouse free). The menu only hides once the lock actually lands.
+let lockTries = 0, lockRetryT = 0, lockGraceT = 0;
+const capture = () => {
+  sound();
+  const p = canvas.requestPointerLock({ unadjustedMovement: true });
+  if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => {
+    if (++lockTries < 3) { clearTimeout(lockRetryT); lockRetryT = setTimeout(capture, 1300); }
+    else { lockTries = 0; ui(false); } // give up on the mouse: the keyboard still swims
+  });
+};
+canvas.addEventListener('click', () => { lockTries = 0; capture(); });
 addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; } });
 addEventListener('blur', release);
 const touch = (e) => {
@@ -702,15 +727,20 @@ const ui = (m) => {
   if (m) { release(); setTimeout(() => menu && bDive.focus(), 100); } else document.activeElement.blur();
 };
 const go = () => {
-  sound(); ui(false); bDive.textContent = 'Resume';
+  sound(); bDive.textContent = 'Resume';
   // phones: go fullscreen and ask for landscape; where that is refused the CSS rotation still applies
-  if (mob) document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0);
-  if (!mob) capture();
+  if (mob) { ui(false); document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0); }
+  else { lockTries = 0; capture(); } // desktop: the menu hides when the lock lands, not before
 };
 bDive.onclick = go; $('o').onclick = () => ui(true);
 // detail buttons: the current level is lit, the others reload the page with theirs
-$('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', 2 - i); location.reload(); }; });
-document.addEventListener('pointerlockchange', () => ui(!document.pointerLockElement));
+$('q').querySelector('span').textContent = AUTO ? 'Detail · Auto' : 'Detail';
+$('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('abyssal', [2 - i, '', '', '0']); location.reload(); }; }); // a hand-picked level turns auto off
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement) { lockTries = 0; clearTimeout(lockRetryT); clearTimeout(lockGraceT); ui(false); }
+  // a brief loss (focus blip) should not throw the menu back up: only show it if still unlocked shortly after
+  else { clearTimeout(lockGraceT); lockGraceT = setTimeout(() => { if (!document.pointerLockElement) ui(true); }, 400); }
+});
 
 // draw the first frame and wait for the GPU to finish it (pipelines get compiled on first use) before the reveal
 lookAt(...POSES[0]);
@@ -722,6 +752,22 @@ F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0; F[PWAG] = 0;
   PL[0] = F[PX]; PL[1] = F[PY]; PL[2] = F[PZ]; PL[3] = 1.6;
   PL[4] = F[PYAW]; PL[5] = F[PPIT]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
   Q.writeBuffer(uboPlayer, 0, PL);
+}
+// after an auto detail drop the page reloads: put the fish back where it was instead of the start viewpoint
+let savedPos = null;
+try { savedPos = localStorage.abyssalPos; } catch {}
+if (savedPos) {
+  const a = savedPos.split(',').map(Number);
+  if (a.length === 5 && a.every(Number.isFinite)) {
+    F[PX] = a[0]; F[PY] = a[1]; F[PZ] = a[2]; F[PYAW] = a[3]; F[PPIT] = a[4]; F[PROLL] = 0;
+    const cp = cos(a[4]), sy = sin(a[3]), cw = cos(a[3]), sp = sin(a[4]);
+    F[CX] = a[0] - sy * cp * 4.6; F[CY] = a[1] - sp * 4.6 + 1.1; F[CZ] = a[2] + cw * cp * 4.6;
+    const lx = sy * cp * 6.6, ly = sp * 6.6 - 1.1, lz = -cw * cp * 6.6;
+    F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
+    PL[0] = a[0]; PL[1] = a[1]; PL[2] = a[2]; PL[3] = 1.6; PL[4] = a[3]; PL[5] = a[4]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
+    Q.writeBuffer(uboPlayer, 0, PL);
+  }
+  try { delete localStorage.abyssalPos; } catch {}
 }
 await say('Letting the light in…', 1, 400);
 render(); await Q.onSubmittedWorkDone();
