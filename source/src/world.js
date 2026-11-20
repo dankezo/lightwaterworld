@@ -379,8 +379,9 @@ function makeWorld(D, T, flyPts, POSES) {
   const jelly = [];
   rseed(15);
   for (let i = 0; i < 12; i++) { const a = rnd() * TAU, r = rr(10, 90); jelly.push(cos(a) * r, rr(-28, -14), sin(a) * r, rr(2, 6), rnd(), rr(0.03, 0.08) * (rnd() < 0.5 ? 1 : -1), rr(0.8, 1.4), rnd()); }
-  // --- mecha worm: one 8-segment metal worm swimming a slow circle
-  const worm = [20, -24, -10, 18, 0.5, 0.05, 1.2, 0.3];
+  // --- mecha worm: one 8-segment metal worm swimming a slow circle, just off the spawn (the fish starts
+  // near 9, -41, 6), so it is in view from the first dive
+  const worm = [-2, -38, 5, 10, 0.5, 0.05, 1.2, 0.3];
 
   // --- drifting particles
   const snow = new Float32Array(9000 * 4);

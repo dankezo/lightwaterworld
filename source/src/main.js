@@ -418,8 +418,9 @@ const CAMD = 4.6, CAMH = 1.1, CAML = 2;
 // Used at load and whenever third-person starts, so the first frame is already far instead of swinging in close.
 const snapCam = () => {
   const cp = cos(F[PPIT]), sy = sin(F[PYAW]), cw = cos(F[PYAW]), sp = sin(F[PPIT]);
-  F[CX] = F[PX] - sy * cp * CAMD; F[CY] = F[PY] - sp * CAMD + CAMH; F[CZ] = F[PZ] + cw * cp * CAMD;
-  const lx = sy * cp * (CAMD + CAML), ly = sp * (CAMD + CAML) - CAMH, lz = -cw * cp * (CAMD + CAML);
+  const tx = sy * cp, ty = sp, tz = -cw * cp, b = clearBoom(F[PX], F[PY], F[PZ], tx, ty, tz);
+  F[CX] = F[PX] - tx * b; F[CY] = F[PY] - ty * b + CAMH; F[CZ] = F[PZ] - tz * b;
+  const lx = tx * (b + CAML), ly = ty * (b + CAML) - CAMH, lz = tz * (b + CAML);
   F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
 };
 function toggleView() {
@@ -578,6 +579,15 @@ function collide() {
     }
   }
 }
+// distance to the rock at a point (metres, < 0 in water): temporarily moves the camera there to sample it
+const rockAt = (x, y, z) => { const ox = F[CX], oy = F[CY], oz = F[CZ]; F[CX] = x; F[CY] = y; F[CZ] = z; sd(0); F[CX] = ox; F[CY] = oy; F[CZ] = oz; return CS[0]; };
+// the longest camera boom that stays in clear water: shortens when a rock is behind the fish, so the rock
+// never fills the screen
+const clearBoom = (px, py, pz, tx, ty, tz) => {
+  let b = CAMD;
+  while (b > 0.8 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4;
+  return b;
+};
 
 let autoT = 0, autoN = 0, autoSum = 0; // auto detail: rolling frame-time window
 function frame(now) {
@@ -649,11 +659,17 @@ function frame(now) {
       F[PX] = px; F[PY] = py; F[PZ] = pz;
       const spd = sqrt(vx * vx + vy * vy + vz * vz);
       F[PWAG] += dt * (4 + spd * 1.1);
-      // camera follows behind the fish with lag, looking a little ahead of it
-      const kc = 1 - exp(-dt * 5);
-      F[CX] += (px - tx * CAMD - F[CX]) * kc;
-      F[CY] += (py - ty * CAMD + CAMH - F[CY]) * kc;
-      F[CZ] += (pz - tz * CAMD - F[CZ]) * kc;
+      // camera follows behind the fish with lag, looking a little ahead of it; the boom shortens when a rock
+      // is behind the fish, and the camera is pulled out toward the fish if it is in rock at all
+      const kc = 1 - exp(-dt * 5), b = clearBoom(px, py, pz, tx, ty, tz);
+      F[CX] += (px - tx * b - F[CX]) * kc;
+      F[CY] += (py - ty * b + CAMH - F[CY]) * kc;
+      F[CZ] += (pz - tz * b - F[CZ]) * kc;
+      if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
+        const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
+        const nd = max(0.8, dl - 2);
+        F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
+      }
       const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
       F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
       // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
@@ -717,7 +733,14 @@ const capture = () => {
   });
 };
 canvas.addEventListener('click', () => { lockTries = 0; capture(); });
-addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; } });
+// steering without a locked pointer: drag the scene to look (the lock can refuse outside a click)
+let drag = false, dragX = 0, dragY = 0;
+canvas.addEventListener('mousedown', (e) => { if (e.button || menu || mob) return; drag = true; dragX = e.clientX; dragY = e.clientY; });
+addEventListener('mouseup', () => drag = false);
+addEventListener('mousemove', (e) => {
+  if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; }
+  else if (drag && !menu) { mdx += e.clientX - dragX; mdy += e.clientY - dragY; dragX = e.clientX; dragY = e.clientY; }
+});
 addEventListener('blur', release);
 const touch = (e) => {
   e.preventDefault(); sound(); tN = e.touches.length;

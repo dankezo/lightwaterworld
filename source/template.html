@@ -43,7 +43,12 @@ body:not(.g) canvas { filter: blur(1vmax) brightness(.5); transform: scale(1.06)
   transition: opacity .5s, visibility .5s;
 }
 body:not(.i) #intro { opacity: 0; visibility: hidden; }
-#x { max-width: 30em; font-size: .85em; letter-spacing: .06em; text-wrap: balance; }
+#sub { max-width: 30em; font-size: .9em; letter-spacing: .06em; text-wrap: balance; color: #bfeef7; }
+/* the intro guide: the controls as a small card of keycaps, the same look as the pause menu */
+#guide { display: grid; gap: .55em; padding: 1em 1.4em; border-radius: .7em; background: #03131cb3; text-align: left; }
+#guide p { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .9em; margin: 0; font-size: .8em; letter-spacing: .12em; text-transform: uppercase; }
+#guide i { display: flex; justify-self: end; align-items: center; gap: .25em; font-style: normal; }
+#guide b { min-width: 1.1em; padding: .2em .5em; border-radius: .35em; background: #e8fbff; box-shadow: inset 0 -.15em #0004; color: #03222d; text-align: center; }
 #ok { padding: .9em 2.2em; background: linear-gradient(#9ff6ff, #19c3d6); font-size: 1.3em; box-shadow: inset 0 -.2em #0003, 0 0 2em #19c3d6b3; }
 #v { font-size: .8em; color: #7ff3ff; letter-spacing: .12em; }
 h1 {
@@ -134,6 +139,9 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
   font-size: .8em; letter-spacing: .12em; color: #e8fbff; opacity: .8; pointer-events: none;
 }
 .g #e { display: block; }
+/* only on a real mouse: while the pointer is free, say a click on the scene steers */
+#s { position: absolute; left: 50%; bottom: 1.5em; transform: translateX(-50%); display: none; padding: .4em .9em; border-radius: .6em; background: #03222dcc; font-size: .85em; letter-spacing: .08em; color: #e8fbff; pointer-events: none; white-space: nowrap; }
+@media (pointer: fine) { .g:not(.p) #s { display: block; } }
 
 /* no WebGPU: a bright-water fallback screen with a tour video instead of the scene.
    The gradient behind it carries the page on its own, so it looks complete while the video
@@ -157,9 +165,16 @@ body.f #m, body.f canvas { display: none; }
 <canvas id=c></canvas>
 <div id=intro>
   <h1>Lightwater World</h1>
-  <p id=x>You are the gold fish. WASD swims, the mouse steers, Space dives, E rises, Shift is faster. V switches to the free camera.</p>
+  <p id=sub>Swim the bright water as the gold fish.</p>
+  <div id=guide>
+    <p><i><b>W</b><b>A</b><b>S</b><b>D</b></i>Swim</p>
+    <p><i><b>Mouse</b></i>Steer · drag also works</p>
+    <p><i><b>Space</b><b>E</b></i>Dive / rise</p>
+    <p><i><b>Shift</b></i>Faster</p>
+    <p><i><b>V</b></i>Fish / free camera</p>
+  </div>
   <button id=ok>OK</button>
-  <p id=v>v1.3</p>
+  <p id=v>v1.4</p>
 </div>
 <div id=m>
   <h1>Lightwater World</h1>
@@ -187,7 +202,7 @@ body.f #m, body.f canvas { display: none; }
     </div>
   </div>
   <p class=ft>
-    <span>v1.3</span>
+    <span>v1.4</span>
     <a href=https://github.com/dankezo/lightwaterworld target=_blank><svg viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
   </p>
 </div>
@@ -199,6 +214,7 @@ body.f #m, body.f canvas { display: none; }
 </div>
 <button id=o aria-label=Menu>≡</button>
 <p id=e>ESC · Menu</p>
+<p id=s>Click the scene to steer with the mouse</p>
 <pre id=i></pre>
 <script>
 /*SCRIPT*/
