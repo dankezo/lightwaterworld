@@ -2,12 +2,13 @@
 <html lang=en>
 <head>
 <meta charset=utf-8>
-<title>Abyssal Garden</title>
+<title>Lightwater World</title>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=theme-color content=#03131c>
 <style>
 /* The class on <body> is the state of the page:
-   l = loading, m = menu, g = in the scene (g p while the mouse is captured), l e = failed to start */
+   l = loading, m = menu, g = in the scene (g p while the mouse is captured), l e = failed to start,
+   f = no WebGPU, show the fallback screen instead of the scene */
 html { background: #03131c; }
 body {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; overflow: hidden;
@@ -74,9 +75,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
   box-shadow: inset 0 -.2em #0003, 0 0 2em #19c3d6b3;
 }
 
-/* GitHub and Ko-fi: always at the bottom of the menu, in their own colours */
+/* GitHub: always at the bottom of the menu, in its own colour */
 #f { position: absolute; left: 0; right: 0; bottom: 1.5em; display: flex; justify-content: center; gap: 1em; font-size: .8em; }
-a + a { background: #ff5e5b; color: #fff; }
 svg { width: 1.5em; height: 1.5em; fill: currentColor; }
 
 /* dark plates under the dive button: detail level, list of controls, touch hint */
@@ -117,12 +117,29 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
   position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace;
   white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none;
 }
+
+/* no WebGPU: a bright-water fallback screen with a tour video instead of the scene.
+   The gradient behind it carries the page on its own, so it looks complete while the video
+   and poster files are still missing. */
+#fb { display: none; }
+body.f #fb {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: min(1.6em, 4vmin);
+  padding: 1em; text-align: center; color: #03222d;
+  background: linear-gradient(#8ff5ff, #2ecfe0 55%, #0b6b84);
+}
+body.f #m, body.f canvas { display: none; }
+#fb h1 { background: none; color: #03222d; -webkit-text-fill-color: #03222d; filter: drop-shadow(0 .06em .15em #fff8); }
+#fb video {
+  width: min(900px, 100%); aspect-ratio: 16/9; border-radius: .7em;
+  background: linear-gradient(#19c3d6, #0b3a4d); box-shadow: 0 .5em 2em #03222d66;
+}
+#fb p { max-width: 34em; font-size: .85em; letter-spacing: .06em; text-wrap: balance; }
 </style>
 </head>
 <body class=l>
 <canvas id=c></canvas>
 <div id=m>
-  <h1>Abyssal Garden</h1>
+  <h1>Lightwater World</h1>
   <div id=a>
     <div id=l><div id=p><i id=b></i></div><p id=s>Diving…</p><p id=w hidden>Use Google Chrome for optimal experience</p></div>
     <div id=g>
@@ -130,24 +147,30 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
       <p id=q><span>Detail</span><button>Low</button><button>Medium</button><button>High</button></p>
       <div id=k>
         <p>
-          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Swim
+          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Swim as the gold fish
           <i><b>Q</b><b>E</b></i>Down / up
           <i><b>Shift</b></i>Faster
-          <i><b>1</b>–<b>6</b></i>Viewpoints
+          <i><b>1</b>-<b>6</b></i>Viewpoints
         </p>
         <p>
+          <i><b>V</b></i>Fish / free camera
           <i><b>Esc</b></i>Menu
           <i><b>M</b></i>Mute
           <i><b>H</b></i>Stats
         </p>
       </div>
-      <p id=h>Hold to swim forward · slide to steer · second finger to go faster</p>
+      <p id=h>You are the gold fish · hold to swim · slide to steer · second finger for speed</p>
     </div>
   </div>
   <p id=f>
-    <a href=https://github.com/Noniv/abyssal-garden target=_blank><svg viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
-    <a href=https://ko-fi.com/noniv target=_blank><svg viewBox="0 0 24 24"><path fill-rule=evenodd d="M2 5h16.5a4.5 4.5 0 0 1 0 9H17a6 6 0 0 1-6 5H8a6 6 0 0 1-6-6zM17 8v3h1.5a1.5 1.5 0 0 0 0-3zM9.5 15.5 5.9 12a2.2 2.2 0 0 1 3.6-2.5 2.2 2.2 0 0 1 3.6 2.5z"/></svg>Support</a>
+    <a href=https://github.com/dankezo/lightwaterworld target=_blank><svg viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
   </p>
+</div>
+<div id=fb>
+  <h1>Lightwater World</h1>
+  <video autoplay muted loop playsinline poster="assets/fallback-tour-poster.jpg"><source src="assets/fallback-tour.mp4" type="video/mp4"></video>
+  <p>The interactive swim needs a current Chrome or Edge (desktop or Android) with hardware acceleration.</p>
+  <button id=t>Try again</button>
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>

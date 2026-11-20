@@ -1,4 +1,14 @@
-# Abyssal Garden
+# Lightwater World
+
+**A fork of [Noniv/abyssal-garden](https://github.com/Noniv/abyssal-garden) (MIT).** The whole original underwater world is kept intact; this fork changes the light, the fish and how you swim through it.
+
+## What changed in this fork
+
+- **Brighter water:** lighter aqua water color, stronger sunlight and brighter exposure and light rays, so the scene reads clearly brighter than the original.
+- **More fish:** bigger schools plus four new ones, with four new species alongside the original blue fish - orange clownfish with white bands, yellow angelfish with blue bars, bigger pale pufferfish and softly glowing fish.
+- **Jellyfish:** 12 glowing bells that pulse and drift, with long swaying tentacles.
+- **Mecha worm:** one 8-segment metal worm with joint rings, a dorsal glow strip, a drill nose and red eyes, swimming a slow circle.
+- **You are a fish:** the page starts in third-person mode, where you swim as a gold-orange fish with a glowing stripe. `W` `A` `S` `D` swim, the mouse steers its heading, the tail wags with speed and the fish banks into turns. Press `V` to switch back to the original free camera.
 
 **A dreamy underwater world you can swim through, right in your browser.**
 
@@ -21,6 +31,7 @@ Nothing to install, and it works offline. It needs a browser with **WebGPU**. If
 - **Light rays** streaming down from a wavy surface, with shimmering caustics on the sea floor
 - **A sunken wooden ship**, a **giant stone whale tail**, rock arches, canyons and floating boulders
 - **Manta rays**, schools of fish, rising bubbles and drifting particles
+- **Glowing jellyfish** drifting through the open water, and a **metal mecha worm** circling slowly
 - **A purple grotto** with glowing magenta ground cover, coral and barrel sponges
 - **A soundscape** made up as you listen: a deep rumble, distant whale calls, soft chimes and bubbles
 
@@ -35,10 +46,11 @@ Nothing to install, and it works offline. It needs a browser with **WebGPU**. If
 
 | | Keyboard & mouse |
 |---|---|
-| Look around | Move the mouse |
+| Look around / steer the fish | Move the mouse |
 | Swim | `W` `A` `S` `D` |
 | Up / down | `E` / `Q` |
 | Swim faster | Hold `Shift` |
+| Fish camera / free camera | `V` (the page starts as the gold fish) |
 | Jump to a viewpoint | `1` to `6` (the spots in the screenshots) |
 | Menu | `Esc` releases the mouse and opens the menu with the list of controls; **Resume** takes you back |
 | Sound on / off | `M` (sound starts when you dive in) |

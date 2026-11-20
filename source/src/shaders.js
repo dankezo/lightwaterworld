@@ -193,10 +193,10 @@ const S_G = /*wgsl*/`
 struct G { vp: mat4x4f, sm: mat4x4f, cam: vec4f, right: vec4f, up: vec4f, fwd: vec4f, sun: vec4f, res: vec4f, mis: vec4f };
 const SIG = vec3f(.058, .0235, .0195);
 const KD = vec3f(.056, .0245, .0170);
-const WCOL = vec3f(.16, .58, .90);
+const WCOL = vec3f(.30, .72, .88);
 const KDZ = vec3f(.034, .023, .018);
-const PCOL = vec3f(.58, .66, .98);
-const SUNC = vec3f(1.7, 1.6, 1.45);
+const PCOL = vec3f(.66, .72, 1.0);
+const SUNC = vec3f(2.3, 2.15, 1.85);
 const TAU = 6.2831853;
 const LOW = ${LV > 1};
 fn sat(x: f32) -> f32 { return clamp(x, 0., 1.); }
@@ -521,11 +521,36 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
 @fragment fn fsFish(i: VO) -> @location(0) vec4f {
   let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
   let z = zone(i.wp); let vv = vol(i.wp);
+  // species is encoded in the per-fish seed: default .0-.55, clownfish .55-.70, angelfish .70-.82,
+  // pufferfish .82-.90 (grown bigger in world.js), glowfish .90-1.0
   var alb = mix(vec3f(.50, .68, .80), vec3f(.10, .22, .40), ss(-.05, .2, i.op.y));
-  alb = mix(alb, vec3f(.95, .8, .3), step(.86, fract(i.sd * 7.7)) * .6);
+  var glow = vec3f(0.);
+  if (i.sd >= .55 && i.sd < .70) {
+    // clownfish: orange with two white bands
+    alb = vec3f(.95, .45, .08);
+    let band = ss(.30, .34, i.op.x) * (1. - ss(.38, .42, i.op.x)) + ss(-.08, -.04, i.op.x) * (1. - ss(.0, .04, i.op.x));
+    alb = mix(alb, vec3f(.95), clamp(band, 0., 1.) * .9);
+  } else if (i.sd >= .70 && i.sd < .82) {
+    // angelfish: yellow with blue bars
+    alb = vec3f(.95, .78, .12);
+    let bar = step(fract(i.op.x * 6. + .3), .38);
+    alb = mix(alb, vec3f(.15, .35, .85), bar * .85);
+  } else if (i.sd >= .82 && i.sd < .90) {
+    // pufferfish: pale with dark spots
+    alb = vec3f(.82, .78, .62);
+    let sp = step(.72, hs(floor(i.op.x * 9.) * 3.1 + floor(i.op.y * 9.) * 7.7 + 2.));
+    alb = mix(alb, vec3f(.15, .12, .08), sp * .8);
+  } else if (i.sd >= .90) {
+    // glowfish: pale cyan, softly glowing
+    alb = vec3f(.55, .85, .9);
+    glow = vec3f(.15, .8, .9) * (.8 + .4 * sin(g.cam.w * 2. + i.sd * 50.));
+  } else {
+    alb = mix(alb, vec3f(.95, .8, .3), step(.86, fract(i.sd * 7.7)) * .6);
+  }
   let E = sunE(i.wp.y, z) * i.lt;
   var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.3);
   c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.6 + vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25 * vv.g;
+  c += glow;
   return fin(fog(c, i.wp, z));
 }
 @vertex fn vsManta(i: VI) -> VO {
@@ -575,6 +600,114 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   let sky = amb(i.wp, vec3f(0., 1., 0.), vv.g, z);
   c += alb * sky * ca * .45 * (1. - top) + sky * pow(1. - ndv, 3.) * .35;
   return fin(fog(c, i.wp, z));
+}
+// jellyfish: bell (aux 0) pulses, tentacles (aux 1) sway; drifts in a slow circle like a fish school
+@vertex fn vsJelly(i: VI) -> VO {
+  var o: VO;
+  let t = g.cam.w; let R = i.a.w; let sz = i.b.z;
+  let ta = t * i.b.y + i.b.w;
+  let P = i.a.xyz + vec3f(R * cos(ta), 1.2 * sin(ta * .6 + i.b.w * 3.), R * .6 * sin(ta));
+  let T = normalize(vec3f(-R * sin(ta), .72 * cos(ta * .6 + i.b.w * 3.), R * .6 * cos(ta))) * sign(i.b.y);
+  var S = normalize(cross(vec3f(0., 1., 0.), T)); var Up = cross(T, S);
+  let pulse = 1. + .16 * sin(t * 1.6 + i.b.w * 9. + i.b.x * 20.);
+  let bell = step(i.n.w, .5);
+  var l = i.p * sz;
+  l.x *= mix(1., pulse, bell); l.z *= mix(1., pulse, bell);
+  let sway = (1. - bell) * max(-l.y, 0.);
+  l.x += sin(t * 1.1 + i.b.x * 30. + l.y * 2.5) * .12 * sway;
+  l.z += cos(t * .9 + i.b.x * 24. + l.y * 2.) * .12 * sway;
+  let w = P + T * l.x + Up * l.y + S * l.z;
+  o.cp = g.vp * vec4f(w, 1.); o.wp = w; o.n = T * i.n.x + Up * i.n.y + S * i.n.z; o.op = i.p; o.sd = i.n.w;
+  o.lt = pulse;
+  return o;
+}
+@fragment fn fsJelly(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let bell = step(i.sd, .5);
+  let glowC = mix(vec3f(.65, .4, 1.), vec3f(1., .45, .75), bell);
+  var alb = mix(vec3f(.55, .35, .8), vec3f(.85, .55, .7), bell) * .6;
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.2);
+  let rim = pow(1. - sat(dot(n, V)), 2.);
+  c += glowC * (mix(.5, 1.4, bell) * (.6 + .5 * i.lt) + rim * 1.2);
+  return fin(fog(c, i.wp, z));
+}
+// mecha worm: 8 segments (aux = segment / 7), one mesh bent along a travelling sine wave,
+// swimming in a slow circle like a manta; dark metal, dorsal glow strip, red eyes on the head
+@vertex fn vsWorm(i: VI) -> VO {
+  var o: VO;
+  let t = g.cam.w; let R = i.a.w; let sz = i.b.z;
+  let ta = t * i.b.y + i.b.x;
+  let P = i.a.xyz + vec3f(R * cos(ta), 2. * sin(ta * .8 + i.b.w * 2.), R * .7 * sin(ta));
+  let T = normalize(vec3f(-R * sin(ta), 1.6 * cos(ta * .8 + i.b.w * 2.), R * .7 * cos(ta))) * sign(i.b.y);
+  var S = normalize(cross(vec3f(0., 1., 0.), T)); var Up = cross(T, S);
+  var l = i.p * sz;
+  let wph = l.x * 1.1 - t * 2.4 + i.b.w * 6.;
+  l.z += sin(wph) * .3 * clamp(-l.x / (5. * sz), 0., 1.);
+  let w = P + T * l.x + Up * l.y + S * l.z;
+  o.cp = g.vp * vec4f(w, 1.); o.wp = w; o.n = T * i.n.x + Up * i.n.y + S * i.n.z; o.op = i.p; o.sd = round(i.n.w * 7.);
+  o.lt = 1.;
+  return o;
+}
+@fragment fn fsWorm(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = zone(i.wp); let vv = vol(i.wp);
+  let seg = i.sd;
+  var alb = vec3f(.09, .10, .12) * (.85 + .3 * step(.5, fract(seg * .5)));
+  let E = sunE(i.wp.y, z);
+  var c = alb * (E * (.3 + .7 * sat(dot(n, L))) + amb(i.wp, n, vv.g, z) * 1.1);
+  c += E * pow(sat(dot(n, normalize(V + L))), 40.) * 1.2;
+  // dorsal glow strip along the top of every segment
+  let strip = ss(.2, .28, i.op.y);
+  c += vec3f(.1, .9, .8) * strip * 1.6;
+  // red eyes on the head segment (seg 0), upper sides of the head tube only: the head tube sits at
+  // x <= 0 and the drill nose starts at x 0.05, so the x gate keeps the eyes off the nose
+  let eye = step(.5, 1. - seg) * step(i.op.x, .04) * ss(.16, .22, i.op.y) * ss(.06, .12, abs(i.op.z)) * (1. - ss(.2, .26, abs(i.op.z)));
+  c += vec3f(1., .08, .05) * eye * 2.2;
+  return fin(fog(c, i.wp, z));
+}
+`;
+
+// ---------------------------------------------------------------- third-person player fish (gold-orange, glowing stripe)
+// Own tiny module: only the G uniform plus the player uniform, no textures. The fragment shader inlines
+// the fog and a simple sun + ambient term instead of the texture-based helpers in S_B.
+const W_PLAYER = S_G + /*wgsl*/`
+struct PL { pos: vec3f, size: f32, ang: vec4f, wag: vec2f, pad: vec2f };
+@group(0) @binding(0) var<uniform> g: G;
+@group(0) @binding(1) var<uniform> pl: PL;
+struct VI { @location(0) p: vec3f, @location(1) n: vec4f };
+struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) op: vec3f };
+@vertex fn vsPlayer(i: VI) -> VO {
+  var o: VO;
+  let yaw = pl.ang.x; let pitch = pl.ang.y; let roll = pl.ang.z;
+  let cp = cos(pitch); let sp = sin(pitch); let sy = sin(yaw); let cy = cos(yaw);
+  let T = vec3f(sy * cp, sp, -cy * cp);
+  let R = vec3f(cy, 0., sy);
+  let U0 = vec3f(-sp * sy, cp, sp * cy);
+  let cr = cos(roll); let sr = sin(roll);
+  let R2 = R * cr + U0 * sr;
+  let U2 = U0 * cr - R * sr;
+  var l = i.p * pl.size;
+  l.z += sin(pl.wag.x + l.x * 5.) * .22 * (.4 * pl.size - l.x) * pl.wag.y;
+  let w = pl.pos + T * l.x + U2 * l.y + R2 * l.z;
+  o.cp = g.vp * vec4f(w, 1.); o.wp = w; o.n = T * i.n.x + U2 * i.n.y + R2 * i.n.z; o.op = i.p;
+  return o;
+}
+@fragment fn fsPlayer(i: VO) -> @location(0) vec4f {
+  let n = normalize(i.n); let L = g.sun.xyz; let V = normalize(g.cam.xyz - i.wp);
+  let z = ss(44., 26., length(i.wp.xz - vec2f(6., 84.)));
+  var alb = mix(vec3f(.95, .55, .12), vec3f(.72, .32, .05), ss(-.05, .2, i.op.y));
+  alb = mix(alb, vec3f(.98, .85, .55), ss(.02, .12, -i.op.y));
+  let E = SUNC * exp(kd(z) * (min(i.wp.y, 0.) / g.sun.y)) * (.5 + .5 * sat(-i.wp.y / 30.));
+  var c = alb * (E * (.25 + .75 * sat(dot(n, L))) + vec3f(.10, .28, .38) * 1.3);
+  c += E * pow(sat(dot(n, normalize(V + L))), 24.) * 1.6;
+  let stripe = (1. - ss(.02, .06, abs(i.op.y))) * ss(-.25, .0, i.op.x) * (1. - ss(.3, .45, i.op.x));
+  c += vec3f(1., .75, .25) * stripe * 1.8;
+  c += vec3f(.3, .6, .7) * pow(1. - sat(dot(n, V)), 3.) * .25;
+  let v = i.wp - g.cam.xyz; let d = length(v); let rd = v / d;
+  c = c * exp(-sg(z) * d) * ss(230., 185., d) + fogIn(g.cam.xyz, rd, d, z, g.sun.xyz);
+  return fin(c);
 }
 `;
 

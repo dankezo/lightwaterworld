@@ -16,9 +16,12 @@ const say = (m, to, ms) => {
   return new Promise((r) => { a.ready.then(() => setTimeout(r)); setTimeout(r, document.hidden ? 0 : 1e3); });
 };
 const fail = (m) => { throw new Error(m, { cause: 1 }); }; // cause marks a message that is shown as it is
-if (!navigator.gpu) fail('This scene needs WebGPU. Try a current Chrome or Edge.');
-const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-if (!adapter) fail('No WebGPU adapter found.');
+// no WebGPU: show the fallback screen and stop here (a plain return leaves the wrapper catch quiet)
+$('t').onclick = () => location.reload();
+if (!navigator.gpu) { body.className = 'f'; return; }
+let adapter;
+try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { body.className = 'f'; return; }
+if (!adapter) { body.className = 'f'; return; }
 $('w').hidden = !!navigator.userAgentData; // only Chromium-based browsers have it
 const hasTS = adapter.features.has('timestamp-query');
 const device = await adapter.requestDevice({ requiredFeatures: hasTS ? ['timestamp-query'] : [] });
@@ -50,6 +53,10 @@ const tMap = tex(512, 512, 'rgba8unorm', TU.TEXTURE_BINDING | TU.COPY_DST);
 
 const UB = new Float32Array(60), UBS = new Float32Array(60);
 const ubo = device.createBuffer({ size: 240, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 240, usage: BU.UNIFORM | BU.COPY_DST });
+// player fish uniform, updated in place every frame in third-person mode:
+// pos.xyz, size, yaw, pitch, roll, -, wag phase, wag amplitude, then padding
+const PL = new Float32Array(16);
+const uboPlayer = device.createBuffer({ size: 64, usage: BU.UNIFORM | BU.COPY_DST });
 const WT = new Float32Array(4), uboW = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST });
 
 const VF = SS.VERTEX | SS.FRAGMENT;
@@ -104,6 +111,18 @@ const pLeafS = scenePipe(mLeaf, 'vs', 'fs', [ibLeaf], { strip: true, constants: 
 const pLeafF = scenePipe(mLeaf, 'vs', 'fs', [ibLeaf], { strip: true, constants: { ROWS: 3 } });
 const pFish = scenePipe(mAnim, 'vsFish', 'fsFish', [vbSolid, ibAnim]);
 const pManta = scenePipe(mAnim, 'vsManta', 'fsManta', [vbSolid, ibAnim]);
+const pJelly = scenePipe(mAnim, 'vsJelly', 'fsJelly', [vbSolid, ibAnim]);
+const pWorm = scenePipe(mAnim, 'vsWorm', 'fsWorm', [vbSolid, ibAnim]);
+// player fish: its own module and layout (G uniform + player uniform), reusing the fish mesh
+const bglPlayer = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, buffer: {} }] });
+const plPlayer = device.createPipelineLayout({ bindGroupLayouts: [bglPlayer] });
+const bgPlayer = device.createBindGroup({ layout: bglPlayer, entries: [{ binding: 0, resource: { buffer: ubo } }, { binding: 1, resource: { buffer: uboPlayer } }] });
+const mPlayer = mod(W_PLAYER);
+const pPlayer = device.createRenderPipeline({ layout: plPlayer,
+  vertex: { module: mPlayer, entryPoint: 'vsPlayer', buffers: [vbSolid] },
+  fragment: { module: mPlayer, entryPoint: 'fsPlayer', targets: [{ format: HDR }] },
+  primitive: { topology: 'triangle-list', cullMode: 'none' },
+  depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' }, multisample: { count: AA } });
 const pSurf = scenePipe(mSurf, 'vs', 'fs', [], { strip: true }), pBack = scenePipe(mSurf, 'vsB', 'fsB', [], { strip: true });
 const pBub = scenePipe(mSpr, 'vsBub', 'fsBub', [ibBub], { strip: true, blend: { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } } });
 const ADD = { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'one' } };
@@ -235,6 +254,8 @@ const flyPts = [];
 // per-frame float state lives in one preallocated array, so the frame loop allocates no heap numbers
 const F = new Float64Array(32), P6 = new Float64Array(6);
 const CX = 0, CY = 1, CZ = 2, YAW = 3, PIT = 4, FX = 5, FY = 6, FZ = 7, RX = 8, RZ = 9, UX = 10, UY = 11, UZ = 12, VX = 13, VY = 14, VZ = 15, TIME = 16, FLT = 17, LAST = 18, GPU = 19, HUDT = 20, SPL = 21, MX = 22, MY = 23, MZ = 24;
+// player fish state: position, heading yaw/pitch, bank roll, tail-wag phase
+const PX = 25, PY = 26, PZ = 27, PYAW = 28, PPIT = 29, PROLL = 30, PWAG = 31;
 // aim the camera from P6 = position + look-at point
 function aim() {
   const dx = P6[3] - P6[0], dy = P6[4] - P6[1], dz = P6[5] - P6[2];
@@ -273,14 +294,14 @@ D = Wd.gy = T.smp = null; // with gy goes the generator's working memory (about 
 
 await say('Building set pieces…', 0.94, 1200);
 // mesh ids: 0-3 boulders, 4-6 sponges, 7-8 coral, 9 tube sponge, 10 whale fluke, 11 ship, 12 manta, 13 fish,
-// 14-20 rock chunks + pebbles, 21-22 coral LOD, 23-25 far LOD of the large rock chunks
+// 14-20 rock chunks + pebbles, 21-22 coral LOD, 23-25 far LOD of the large rock chunks, 26 jellyfish, 27 worm
 const meshes = [meshChunk(1, 3), meshChunk(7, 3), meshChunk(13, 3), meshChunk(22, 3),
   meshLathe([[0, 0, 0.5], [0.34, 0, 0.6], [0.5, 0.2, 0.85], [0.6, 0.6, 1], [0.55, 0.95, 1], [0.47, 1.08, 1], [0.38, 1.1, 0.9], [0.3, 1.0, 0.45], [0.26, 0.6, 0.15], [0, 0.35, 0.05]], 18, 0.3, 9),
   meshLathe([[0, 0, 0.5], [0.2, 0, 0.6], [0.26, 0.5, 0.85], [0.4, 1.25, 1], [0.4, 1.42, 1], [0.33, 1.48, 0.9], [0.26, 1.38, 0.4], [0.18, 0.8, 0.12], [0, 0.5, 0.05]], 16, 0.35, 8),
   meshLathe([[0, 0, 0.5], [0.5, 0, 0.7], [0.72, 0.18, 1], [0.74, 0.38, 1], [0.62, 0.5, 0.9], [0.48, 0.42, 0.45], [0.4, 0.2, 0.15], [0, 0.14, 0.06]], 18, 0.25, 10),
   meshCoral(0), meshCoral(1), meshTubes()].map((m) => m.build());
 meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().build(),
-  meshChunk(3).build(), meshChunk(11).build(), meshChunk(29).build(), meshChunk(5, 3).build(), meshChunk(17, 3).build(), meshChunk(41, 3).build(), meshChunk(9, 1).build(), meshCoral(0, 1).build(), meshCoral(1, 1).build(), meshChunk(5, 2, 1).build(), meshChunk(17, 2, 1).build(), meshChunk(41, 2, 1).build());
+  meshChunk(3).build(), meshChunk(11).build(), meshChunk(29).build(), meshChunk(5, 3).build(), meshChunk(17, 3).build(), meshChunk(41, 3).build(), meshChunk(9, 1).build(), meshCoral(0, 1).build(), meshCoral(1, 1).build(), meshChunk(5, 2, 1).build(), meshChunk(17, 2, 1).build(), meshChunk(41, 2, 1).build(), meshJelly().build(), meshWorm().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
 const allV = new Uint8Array(nV * 16), allI = new Uint32Array(nI);
@@ -292,10 +313,10 @@ const solidData = new Float32Array((nSolid + 1) * 12); solidData.set(Wd.solids.d
 const ibSolids = buf(solidData, BU.VERTEX);
 const ibChunk = Wd.chunks.map((c) => buf(c.data, BU.VERTEX)), ibProp = Wd.props.map((c) => buf(c.data, BU.VERTEX));
 const ibBig = buf(new Uint8Array(Wd.big.buf), BU.VERTEX), ibBigF = buf(new Uint8Array(Wd.bigF.buf), BU.VERTEX), ibSmall = buf(new Uint8Array(Wd.small.buf), BU.VERTEX);
-const ibFish = buf(Wd.fish, BU.VERTEX), ibManta = buf(Wd.mantas, BU.VERTEX), ibBubbles = buf(Wd.bubbles, BU.VERTEX), ibSnowB = buf(Wd.snow, BU.VERTEX);
+const ibFish = buf(Wd.fish, BU.VERTEX), ibManta = buf(Wd.mantas, BU.VERTEX), ibJelly = buf(Wd.jelly, BU.VERTEX), ibWorm = buf(Wd.worm, BU.VERTEX), ibBubbles = buf(Wd.bubbles, BU.VERTEX), ibSnowB = buf(Wd.snow, BU.VERTEX);
 const ibGl = buf(Wd.glints, BU.VERTEX), nGl = Wd.glints.length / 8;
-const nFish = Wd.fish.length / 8, nManta = Wd.mantas.length / 8, nBub = Wd.bubbles.length / 8, nSnow = Wd.snow.length / 4;
-const MANTA = meshes[12], FISH = meshes[13];
+const nFish = Wd.fish.length / 8, nManta = Wd.mantas.length / 8, nJelly = Wd.jelly.length / 8, nWorm = Wd.worm.length / 8, nBub = Wd.bubbles.length / 8, nSnow = Wd.snow.length / 4;
+const MANTA = meshes[12], FISH = meshes[13], JELLY = meshes[26], WORM = meshes[27];
 Q.writeTexture({ texture: tVol }, Wd.volD, { bytesPerRow: NX, rowsPerImage: NY / 2 }, [NX / 2, NY / 2, NZ / 2]);
 Q.writeTexture({ texture: tMap }, Wd.gm, { bytesPerRow: 2048 }, [512, 512]);
 
@@ -388,9 +409,20 @@ if (hasTS) {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false;
+let hud = false, third = true; // third: swim as the gold fish; false: the original free camera
+// V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
+// just ahead of the camera with the camera heading, so the camera can pull back behind it.
+function toggleView() {
+  third = !third;
+  F[VX] = F[VY] = F[VZ] = 0;
+  if (third) {
+    const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
+    F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
+    F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0;
+  }
+}
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
-const TANH = 0.6, NEAR = 0.1, EXPO = 0.62, RAYS = 0.54;
+const TANH = 0.6, NEAR = 0.1, EXPO = 0.74, RAYS = 0.70;
 const submitList = [null];
 const rowOrd = new Uint8Array(CELLS);
 // Draws the cells of a cell-sorted buffer that are in view and within [minD, maxD) (scaled by `det`, but not for the
@@ -472,6 +504,14 @@ function render() {
   }
   r.setPipeline(pManta); r.setVertexBuffer(1, ibManta); r.drawIndexed(MANTA.ib.length, nManta, MANTA.i0, MANTA.v0, 0);
   r.setPipeline(pFish); r.setVertexBuffer(1, ibFish); r.drawIndexed(FISH.ib.length, nFish, FISH.i0, FISH.v0, 0);
+  r.setPipeline(pJelly); r.setVertexBuffer(1, ibJelly); r.drawIndexed(JELLY.ib.length, nJelly, JELLY.i0, JELLY.v0, 0);
+  r.setPipeline(pWorm); r.setVertexBuffer(1, ibWorm); r.drawIndexed(WORM.ib.length, nWorm, WORM.i0, WORM.v0, 0);
+  // the player fish, only while swimming as it (hidden in free-camera mode)
+  if (third) {
+    r.setPipeline(pPlayer); r.setBindGroup(0, bgPlayer); r.setVertexBuffer(0, vbMesh);
+    r.drawIndexed(FISH.ib.length, 1, FISH.i0, FISH.v0, 0);
+  }
+  r.setBindGroup(0, bg0); // the player fish uses its own layout: put the scene group back for the kelp on down
   // kelp and plants: 9-row blades up close, 5 rows mid-range, a decimated set far away
   r.setPipeline(pLeaf); r.setVertexBuffer(0, ibBig); drawCells(r, Wd.big.start, Wd.big.lo, Wd.big.hi, 5, false, 18, 0, 24);
   r.setPipeline(pLeaf5); drawCells(r, Wd.big.start, Wd.big.lo, Wd.big.hi, 5, false, 10, 24, 58);
@@ -562,14 +602,51 @@ function frame(now) {
     const kq = 1 - exp(-dt * 30); lkx += mdx * 0.0022; lky += mdy * 0.0022; mdx = 0; mdy = 0;
     const ax = lkx * kq, ay = lky * kq; lkx -= ax; lky -= ay; l2x += ax; l2y += ay;
     const dyw = l2x * kq, dpt = l2y * kq; l2x -= dyw; l2y -= dpt;
-    const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
-    const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 4.5), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd, cp = cos(pitch), sy = sin(yaw), cw = cos(yaw);
-    const vx = F[VX] + ((sy * cp * mf + cw * mr) * sp - F[VX]) * k, vy = F[VY] + ((sin(pitch) * mf + mu) * sp - F[VY]) * k, vz = F[VZ] + ((-cw * cp * mf + sy * mr) * sp - F[VZ]) * k;
-    let x = F[CX] + vx * dt, y = F[CY] + vy * dt, z = F[CZ] + vz * dt;
-    const rad = sqrt(x * x + z * z); if (rad > 150) { x *= 150 / rad; z *= 150 / rad; }
-    y = y < -52 ? -52 : y > -1.2 ? -1.2 : y;
-    F[YAW] = yaw; F[PIT] = pitch; F[VX] = vx; F[VY] = vy; F[VZ] = vz; F[MX] = x - F[CX]; F[MY] = y - F[CY]; F[MZ] = z - F[CZ];
-    collide();
+    const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 4.5), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd;
+    if (third) {
+      // third-person: the deltas steer the fish heading, the fish banks into turns, the camera trails behind
+      F[PYAW] += dyw;
+      let pp = F[PPIT] - dpt; pp = pp < -1.4 ? -1.4 : pp > 1.4 ? 1.4 : pp; F[PPIT] = pp;
+      const turn = dt > 0 ? dyw / dt : 0;
+      let rt = -turn * 0.12; rt = rt < -0.6 ? -0.6 : rt > 0.6 ? 0.6 : rt;
+      F[PROLL] += (rt - F[PROLL]) * (1 - exp(-dt * 6));
+      const cp = cos(pp), sy = sin(F[PYAW]), cw = cos(F[PYAW]), syp = sin(pp);
+      const tx = sy * cp, ty = syp, tz = -cw * cp, rx = cw, rz = sy;
+      const vx = F[VX] + ((tx * mf + rx * mr * 0.6) * sp - F[VX]) * k, vy = F[VY] + ((ty * mf + mu * 0.6) * sp - F[VY]) * k, vz = F[VZ] + ((tz * mf + rz * mr * 0.6) * sp - F[VZ]) * k;
+      F[VX] = vx; F[VY] = vy; F[VZ] = vz;
+      // swim the fish through the same rock-collision stepper the camera uses
+      F[CX] = F[PX]; F[CY] = F[PY]; F[CZ] = F[PZ];
+      F[MX] = vx * dt; F[MY] = vy * dt; F[MZ] = vz * dt;
+      collide();
+      let px = F[CX], py = F[CY], pz = F[CZ];
+      const rad = sqrt(px * px + pz * pz); if (rad > 150) { px *= 150 / rad; pz *= 150 / rad; }
+      py = py < -52 ? -52 : py > -1.2 ? -1.2 : py;
+      F[PX] = px; F[PY] = py; F[PZ] = pz;
+      const spd = sqrt(vx * vx + vy * vy + vz * vz);
+      F[PWAG] += dt * (4 + spd * 1.1);
+      // camera follows behind the fish with lag, looking a little ahead of it
+      const kc = 1 - exp(-dt * 5);
+      F[CX] += (px - tx * 2.2 - F[CX]) * kc;
+      F[CY] += (py - ty * 2.2 + 0.7 - F[CY]) * kc;
+      F[CZ] += (pz - tz * 2.2 - F[CZ]) * kc;
+      const lx = px + tx * 1.5 - F[CX], ly = py + ty * 1.5 - F[CY], lz = pz + tz * 1.5 - F[CZ];
+      F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
+      // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
+      PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
+      PL[4] = F[PYAW]; PL[5] = pp; PL[6] = F[PROLL]; PL[7] = 0;
+      PL[8] = F[PWAG]; PL[9] = spd < 4 ? 0.15 : spd > 26 ? 1 : spd / 26;
+      Q.writeBuffer(uboPlayer, 0, PL);
+    } else {
+      // free camera: the original movement
+      const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
+      const cp = cos(pitch), sy = sin(yaw), cw = cos(yaw);
+      const vx = F[VX] + ((sy * cp * mf + cw * mr) * sp - F[VX]) * k, vy = F[VY] + ((sin(pitch) * mf + mu) * sp - F[VY]) * k, vz = F[VZ] + ((-cw * cp * mf + sy * mr) * sp - F[VZ]) * k;
+      let x = F[CX] + vx * dt, y = F[CY] + vy * dt, z = F[CZ] + vz * dt;
+      const rad = sqrt(x * x + z * z); if (rad > 150) { x *= 150 / rad; z *= 150 / rad; }
+      y = y < -52 ? -52 : y > -1.2 ? -1.2 : y;
+      F[YAW] = yaw; F[PIT] = pitch; F[VX] = vx; F[VY] = vy; F[VZ] = vz; F[MX] = x - F[CX]; F[MY] = y - F[CY]; F[MZ] = z - F[CZ];
+      collide();
+    }
   }
   render();
   if (hud) {
@@ -587,8 +664,9 @@ const key = (e, v) => {
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
+      else if (e.code === 'KeyV') toggleView();
       else if (e.code === 'Escape') ui(true);
-      else if (e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
+      else if (e.code >= 'Digit1' && e.code <= 'Digit6') { third = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[e.code.charCodeAt(5) - 49]); }
     }
   }
 };
@@ -636,6 +714,15 @@ document.addEventListener('pointerlockchange', () => ui(!document.pointerLockEle
 
 // draw the first frame and wait for the GPU to finish it (pipelines get compiled on first use) before the reveal
 lookAt(...POSES[0]);
+// start as the gold fish: the fish sits just ahead of the start camera, facing where it looks
+F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0; F[PWAG] = 0;
+{
+  const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
+  F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
+  PL[0] = F[PX]; PL[1] = F[PY]; PL[2] = F[PZ]; PL[3] = 1.6;
+  PL[4] = F[PYAW]; PL[5] = F[PPIT]; PL[6] = 0; PL[7] = 0; PL[8] = 0; PL[9] = 0.15;
+  Q.writeBuffer(uboPlayer, 0, PL);
+}
 await say('Letting the light in…', 1, 400);
 render(); await Q.onSubmittedWorkDone();
 setTimeout(keep, 15e3, 'abyssalLoad', ''); // the load counts as survived after 15 s of frames

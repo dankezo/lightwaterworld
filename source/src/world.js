@@ -366,11 +366,21 @@ function makeWorld(D, T, flyPts, POSES) {
   // --- fish schools + mantas
   const fish = [];
   rseed(14);
-  const SCH = [[-2, -36, -10, 15, 520, 0.3, 1, 0.945], [8, -30, -70, 22, 420, 0.32, -1], [48, -30, 14, 18, 360, 0.3, 1], [-58, -30, -8, 11, 420, 0.28, -1, 0.3], [8, -36, 84, 16, 320, 0.28, 1],
-    [-90, -28, -70, 25, 300, 0.3, 1], [95, -30, 70, 25, 300, 0.3, -1], [0, -22, 20, 30, 380, 0.34, -1], [-30, -30, -100, 18, 300, 0.3, 1], [16, -36, 30, 12, 300, 0.3, 1], [-48, -34, -58, 12, 300, 0.3, -1], [-45, -35, 38, 14, 320, 0.3, 1]];
-  for (const s of SCH) { const ss = s[7] === undefined ? rnd() : s[7]; for (let i = 0; i < s[4]; i++) fish.push(s[0], s[1], s[2], s[3], rnd(), s[6] * 1.9 / s[3], s[5], ss); }
+  const SCH = [[-2, -36, -10, 15, 650, 0.3, 1, 0.945], [8, -30, -70, 22, 520, 0.32, -1], [48, -30, 14, 18, 450, 0.3, 1], [-58, -30, -8, 11, 520, 0.28, -1, 0.3], [8, -36, 84, 16, 400, 0.28, 1],
+    [-90, -28, -70, 25, 380, 0.3, 1], [95, -30, 70, 25, 380, 0.3, -1], [0, -22, 20, 30, 480, 0.34, -1], [-30, -30, -100, 18, 380, 0.3, 1], [16, -36, 30, 12, 380, 0.3, 1], [-48, -34, -58, 12, 380, 0.3, -1], [-45, -35, 38, 14, 400, 0.3, 1],
+    [20, -26, -40, 14, 340, 0.3, 1], [-70, -32, 30, 16, 340, 0.3, -1], [30, -24, 60, 18, 340, 0.32, 1], [-10, -20, -60, 20, 360, 0.3, -1]];
+  // species is encoded in the per-fish seed (b.x): .0-.55 default, .55-.70 clownfish, .70-.82 angelfish,
+  // .82-.90 pufferfish (grown 2.1x), .90-1.0 glowfish
+  for (const s of SCH) { const ss = s[7] === undefined ? rnd() : s[7]; for (let i = 0; i < s[4]; i++) { const sp = rnd(); fish.push(s[0], s[1], s[2], s[3], sp, s[6] * 1.9 / s[3], s[5] * (sp >= 0.82 && sp < 0.9 ? 2.1 : 1), ss); } }
   const mantas = [];
   for (const m of [[1, -28, 3.5, 14, 3.012, 0.085, 3.6, 0.1], [49, -31, 24.5, 5, 0.029, -0.08, 3.7, 0.4], [0, -14, -80, 34, 0.3, 0.06, 5.2, 0.7], [-50, -18, 20, 26, 5, -0.075, 3.8, 0.55], [10, -16, 86, 26, 2.2, 0.07, 4.4, 0.85], [20, -11, -20, 46, 4.2, -0.045, 5.6, 0.25]]) mantas.push(...m);
+
+  // --- jellyfish: 12 glowing bells drifting in slow circles, same 8-float layout as fish
+  const jelly = [];
+  rseed(15);
+  for (let i = 0; i < 12; i++) { const a = rnd() * TAU, r = rr(10, 90); jelly.push(cos(a) * r, rr(-28, -14), sin(a) * r, rr(2, 6), rnd(), rr(0.03, 0.08) * (rnd() < 0.5 ? 1 : -1), rr(0.8, 1.4), rnd()); }
+  // --- mecha worm: one 8-segment metal worm swimming a slow circle
+  const worm = [20, -24, -10, 18, 0.5, 0.05, 1.2, 0.3];
 
   // --- drifting particles
   const snow = new Float32Array(9000 * 4);
@@ -387,7 +397,7 @@ function makeWorld(D, T, flyPts, POSES) {
     for (let c = 0; c < nCells; c++) { const a = L[c]; for (let i = 0; i < a.length; i += 12) { for (let j = 0; j < 12; j++) data[k++] = a[i + j]; lo[c] = min(lo[c], a[i + 1] - 3); hi[c] = max(hi[c], a[i + 1] + 3); } }
     return { data, n, start, lo, hi };
   };
-  return { gy, glints: new Float32Array(glints), chunks: chunks.map(packC), props: props.map(packC), big: pack(big), bigF: pack(big, 2, 1.5), small: pack(small), solids: { data: new Float32Array(sol.data), ranges: sol.ranges }, bubbles: new Float32Array(bubbles), volD, gm, fish: new Float32Array(fish), mantas: new Float32Array(mantas), snow };
+  return { gy, glints: new Float32Array(glints), chunks: chunks.map(packC), props: props.map(packC), big: pack(big), bigF: pack(big, 2, 1.5), small: pack(small), solids: { data: new Float32Array(sol.data), ranges: sol.ranges }, bubbles: new Float32Array(bubbles), volD, gm, fish: new Float32Array(fish), mantas: new Float32Array(mantas), jelly: new Float32Array(jelly), worm: new Float32Array(worm), snow };
 }
 const fract = (x) => x - floor(x);
 
@@ -553,5 +563,27 @@ function meshFish() {
   for (let i = 0; i < 4; i++) for (let k = 0; k < 6; k++) { const k2 = (k + 1) % 6; m.quad(rings[i][k], rings[i + 1][k], rings[i + 1][k2], rings[i][k2]); }
   const a = m.v(-0.33, 0, 0), b = m.v(-0.56, 0.2, 0), c = m.v(-0.47, 0, 0), d = m.v(-0.56, -0.2, 0);
   m.tri(a, b, c); m.tri(a, c, d);
+  return m;
+}
+// jellyfish: lathe bell (aux 0) + 8 tentacle tubes (aux 1), bell rim at y 0, tentacles hanging to about -1.7
+function meshJelly() {
+  const m = new Mesh();
+  const bell = meshLathe([[0.02, 0.5, 0], [0.35, 0.42, 0], [0.55, 0.22, 0], [0.58, 0.0, 0], [0.5, -0.12, 0], [0.3, -0.18, 0], [0.02, -0.2, 0]], 18, 0);
+  m.p.push(...bell.p); m.i.push(...bell.i); m.aux.push(...bell.aux);
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * TAU, bx = cos(a) * 0.35, bz = sin(a) * 0.35, pts = [];
+    for (let j = 0; j <= 4; j++) pts.push([bx + sin(a + j * 1.3) * 0.08 * j / 4, -0.15 - j * 0.38, bz + cos(a + j * 1.1) * 0.08 * j / 4]);
+    m.tube(pts, (q) => 0.035 * (1 - q / 5), 4, true, () => 1);
+  }
+  return m;
+}
+// mecha worm: 8 segments along -x from the head at +x, radius pinching at the joints (aux = segment / 7),
+// plus a drill nose cone ahead of the head (aux 0)
+function meshWorm() {
+  const m = new Mesh();
+  const pts = [];
+  for (let k = 0; k <= 16; k++) pts.push([-k * 0.32, 0, 0]);
+  m.tube(pts, (k) => 0.3 * (k % 2 === 0 ? 0.78 : 1.0), 8, true, (k) => floor(k / 2) / 7);
+  m.tube([[0.05, 0, 0], [0.5, 0, 0], [0.95, 0, 0]], (k) => 0.26 * (1 - k / 2.4), 8, true, () => 0);
   return m;
 }
