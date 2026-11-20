@@ -214,7 +214,7 @@ const T = buildTerrain(D);
 
 // preset viewpoints (position, look-at), keys 1-6; the world generator dresses the scene around them
 const POSES = [
-  [10, 1.3, 7, -9, -31, -10],
+  [10, 8, 7, -9, -31, -10], // start high in open water, well clear of the seabed
   [50, 1.3, 34, 58, -23, 8],
   [-26, 2.2, -100, 0, -9, -108],
   [-55, 1.5, -18, -60, -30, 8],
@@ -409,7 +409,7 @@ if (hasTS) {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false, third = true; // third: swim as the gold fish; false: the original free camera
+let hud = false, third = true, eye = false; // third: swim as the gold fish; false: the original free camera; eye: first person from the fish eye (V)
 // V switches views. To free camera: keep the current view, stop drifting. Back to the fish: snap the fish
 // just ahead of the camera with the camera heading, so the camera can pull back behind it.
 // third-person camera: how far behind the fish, how high above it, how far ahead it looks
@@ -424,13 +424,18 @@ const snapCam = () => {
   F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
 };
 function toggleView() {
-  third = !third;
   F[VX] = F[VY] = F[VZ] = 0;
-  if (third) {
+  if (!third) {
+    // free camera -> back to third person: put the fish ahead of the camera and snap behind it
+    third = true; eye = false;
     const cp = cos(F[PIT]), sy = sin(F[YAW]), cw = cos(F[YAW]);
     F[PX] = F[CX] + sy * cp * 2; F[PY] = F[CY] + sin(F[PIT]) * 2; F[PZ] = F[CZ] - cw * cp * 2;
     F[PYAW] = F[YAW]; F[PPIT] = F[PIT]; F[PROLL] = 0;
     snapCam();
+  } else {
+    // third person <-> the fish eye: the fish stays where it is, the eye is placed by the frame loop
+    eye = !eye;
+    if (!eye) snapCam();
   }
 }
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
@@ -518,8 +523,8 @@ function render() {
   r.setPipeline(pFish); r.setVertexBuffer(1, ibFish); r.drawIndexed(FISH.ib.length, nFish, FISH.i0, FISH.v0, 0);
   r.setPipeline(pJelly); r.setVertexBuffer(1, ibJelly); r.drawIndexed(JELLY.ib.length, nJelly, JELLY.i0, JELLY.v0, 0);
   r.setPipeline(pWorm); r.setVertexBuffer(1, ibWorm); r.drawIndexed(WORM.ib.length, nWorm, WORM.i0, WORM.v0, 0);
-  // the player fish, only while swimming as it (hidden in free-camera mode)
-  if (third) {
+  // the player fish, only while swimming as it (hidden in free-camera mode and in the eye view)
+  if (third && !eye) {
     r.setPipeline(pPlayer); r.setBindGroup(0, bgPlayer); r.setVertexBuffer(0, vbMesh);
     r.drawIndexed(FISH.ib.length, 1, FISH.i0, FISH.v0, 0);
   }
@@ -585,7 +590,7 @@ const rockAt = (x, y, z) => { const ox = F[CX], oy = F[CY], oz = F[CZ]; F[CX] = 
 // never fills the screen
 const clearBoom = (px, py, pz, tx, ty, tz) => {
   let b = CAMD;
-  while (b > 0.8 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4;
+  while (b > 2 && rockAt(px - tx * b, py - ty * b + CAMH, pz - tz * b) > -CR) b -= 0.4; // never closer than 2: the fish is 1.6 long, a shorter boom puts the camera inside it
   return b;
 };
 
@@ -659,19 +664,25 @@ function frame(now) {
       F[PX] = px; F[PY] = py; F[PZ] = pz;
       const spd = sqrt(vx * vx + vy * vy + vz * vz);
       F[PWAG] += dt * (4 + spd * 1.1);
-      // camera follows behind the fish with lag, looking a little ahead of it; the boom shortens when a rock
-      // is behind the fish, and the camera is pulled out toward the fish if it is in rock at all
-      const kc = 1 - exp(-dt * 5), b = clearBoom(px, py, pz, tx, ty, tz);
-      F[CX] += (px - tx * b - F[CX]) * kc;
-      F[CY] += (py - ty * b + CAMH - F[CY]) * kc;
-      F[CZ] += (pz - tz * b - F[CZ]) * kc;
-      if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
-        const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
-        const nd = max(0.8, dl - 2);
-        F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
+      if (eye) {
+        // the fish eye: the camera is the eye itself, looking where the fish looks; the fish model is hidden, so the view is always clear
+        F[CX] = px + tx * 0.8; F[CY] = py + ty * 0.8 + 0.15; F[CZ] = pz + tz * 0.8;
+        F[YAW] = F[PYAW]; F[PIT] = pp;
+      } else {
+        // camera follows behind the fish with lag, looking a little ahead of it; the boom shortens when a rock
+        // is behind the fish, and the camera is pulled out toward the fish if it is in rock at all
+        const kc = 1 - exp(-dt * 5), b = clearBoom(px, py, pz, tx, ty, tz);
+        F[CX] += (px - tx * b - F[CX]) * kc;
+        F[CY] += (py - ty * b + CAMH - F[CY]) * kc;
+        F[CZ] += (pz - tz * b - F[CZ]) * kc;
+        if (rockAt(F[CX], F[CY], F[CZ]) > -CR) {
+          const dx = F[CX] - px, dy = F[CY] - py, dz = F[CZ] - pz, dl = sqrt(dx * dx + dy * dy + dz * dz) || 1;
+          const nd = max(2, dl - 2); // never closer than 2 to the fish, even when pulled out of rock
+          F[CX] = px + dx / dl * nd; F[CY] = py + dy / dl * nd; F[CZ] = pz + dz / dl * nd;
+        }
+        const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
+        F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
       }
-      const lx = px + tx * CAML - F[CX], ly = py + ty * CAML - F[CY], lz = pz + tz * CAML - F[CZ];
-      F[YAW] = atan2(lx, -lz); F[PIT] = atan2(ly, sqrt(lx * lx + lz * lz));
       // player uniform, updated in place: PL[4..6] yaw/pitch/roll, PL[8] wag phase, PL[9] wag amplitude
       PL[0] = px; PL[1] = py; PL[2] = pz; PL[3] = 1.6;
       PL[4] = F[PYAW]; PL[5] = pp; PL[6] = F[PROLL]; PL[7] = 0;
@@ -701,13 +712,13 @@ function frame(now) {
 const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
-    case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'Space': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
+    case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'Space': ku = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
       else if (e.code === 'KeyV') toggleView();
       else if (e.code === 'Escape') ui(true);
-      else if (e.code >= 'Digit1' && e.code <= 'Digit6') { third = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[e.code.charCodeAt(5) - 49]); }
+      else if (e.code >= 'Digit1' && e.code <= 'Digit6') { third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[e.code.charCodeAt(5) - 49]); }
     }
   }
 };
@@ -733,13 +744,13 @@ const capture = () => {
   });
 };
 canvas.addEventListener('click', () => { lockTries = 0; capture(); });
-// steering without a locked pointer: drag the scene to look (the lock can refuse outside a click)
-let drag = false, dragX = 0, dragY = 0;
-canvas.addEventListener('mousedown', (e) => { if (e.button || menu || mob) return; drag = true; dragX = e.clientX; dragY = e.clientY; });
-addEventListener('mouseup', () => drag = false);
+// the mouse steers by moving it, locked or not: the lock can refuse (his video shows it never held), so never depend on it alone
+let lastMX = null, lastMY = null;
 addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; }
-  else if (drag && !menu) { mdx += e.clientX - dragX; mdy += e.clientY - dragY; dragX = e.clientX; dragY = e.clientY; }
+  if (menu) return;
+  if (e.movementX !== undefined) { mdx += e.movementX; mdy += e.movementY; }
+  else if (lastMX !== null) { mdx += e.clientX - lastMX; mdy += e.clientY - lastMY; }
+  lastMX = e.clientX; lastMY = e.clientY;
 });
 addEventListener('blur', release);
 const touch = (e) => {
@@ -767,7 +778,7 @@ const ui = (m) => {
 };
 const go = () => {
   sound(); bDive.textContent = 'Resume';
-  if (third) snapCam(); // start from the far third-person view, not from where the menu left the camera
+  if (third && !eye) snapCam(); // start from the far third-person view, not from where the menu left the camera
   // phones: go fullscreen and ask for landscape; where that is refused the CSS rotation still applies
   if (mob) { ui(false); document.documentElement.requestFullscreen?.()?.then(() => screen.orientation.lock('landscape')).catch(() => 0); }
   else { lockTries = 0; capture(); } // desktop: the menu hides when the lock lands, not before
