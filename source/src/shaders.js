@@ -822,7 +822,7 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   c += vec3f(1., .2, .05) * eye * 3.;
   return fin(fog(c, i.wp, z));
 }
-// v2.8 anglerfish (vsFish, meshLure - procedural): near-black abyssal body, pale belly, a glowing lure
+// v2.9 anglerfish (vsFish, meshLure - procedural): near-black abyssal body, pale belly, a glowing lure
 // bulb on top of the head (op.x .49-.62, op.y .37-.48), a dark maw under the head front, and two
 // glowing eyes on the sides of the head (op.x .3-.44, op.y .05-.18, |op.z| .1-.24)
 @fragment fn fsLure(i: VO) -> @location(0) vec4f {
@@ -842,7 +842,7 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   c += vec3f(.4, 1., .6) * eye * 2.5;
   return fin(fog(c, i.wp, z));
 }
-// v2.8 plesiosaurus (vsWorm, meshLongneck - procedural): a long-necked sea serpent, dark teal with a
+// v2.9 plesiosaurus (vsWorm, meshLongneck - procedural): a long-necked sea serpent, dark teal with a
 // pale belly, a glowing dorsal stripe along the top of the body and neck (op.y .3-.45) and burning
 // eyes on the head (op.x 2.5-2.85, op.y .55-.78, |op.z| .08-.24)
 @fragment fn fsLongneck(i: VO) -> @location(0) vec4f {

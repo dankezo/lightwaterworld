@@ -10,11 +10,21 @@ const rot = matchMedia('(orientation:portrait) and (pointer:coarse)');
 let loaded = 0, dead; // dead: the graphics device was lost
 const say = (m, to, ms) => {
   if (!dead) $('s').textContent = m;
+  // the % number is set here, from the same `to` as the bar, so the two can never disagree
+  const pct = $('pct'); if (pct) pct.textContent = Math.round(to * 100) + '%';
   const a = $('b').animate({ transform: [`scaleX(${loaded})`, `scaleX(${to})`] }, { duration: ms, fill: 'forwards', easing: 'cubic-bezier(.3,.5,.5,1)' });
   loaded = to;
   // go on once the animation runs: one not started before the thread gets busy stays stuck (timer: hidden tabs)
   return new Promise((r) => { a.ready.then(() => setTimeout(r)); setTimeout(r, document.hidden ? 0 : 1e3); });
 };
+// loading screen: show the detected tier once, and if still loading after 8 s say so in that tier's words
+const tierEl = $('tier'); if (tierEl) tierEl.textContent = 'Device: ' + DEVKIND + ' - ' + TIERNAME;
+let revealed = false;
+setTimeout(() => {
+  if (revealed || !body.classList.contains('l')) return;
+  const slow = $('slow');
+  if (slow) { slow.hidden = false; slow.textContent = TIERNAME === 'Low' ? 'Still loading in Low power-saving mode for this ' + DEVKIND.toLowerCase() + ' - please wait' : 'Still loading - please wait'; }
+}, 8000);
 const fail = (m) => { throw new Error(m, { cause: 1 }); }; // cause marks a message that is shown as it is
 // no WebGPU: show the fallback screen and stop here (a plain return leaves the wrapper catch quiet)
 // the reason is written into #fr so the user can report exactly why it failed
@@ -28,6 +38,12 @@ if (!adapter) { // the GPU may still be recovering from a lost device: one retry
   try { adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); } catch (e) { fbReason('Reason: requestAdapter threw on retry: ' + (e && e.message ? e.message : e)); adapter = null; }
 }
 if (!adapter) { fbReason('Reason: no GPU adapter found. Hardware acceleration may be off, or the GPU is busy.'); body.className = 'f'; return; }
+// adapter info/limits, only if the browser exposes them: never let a missing field break startup
+try {
+  const ai = adapter.info;
+  if (ai) console.log('GPU adapter: ' + [ai.vendor, ai.architecture, ai.device, ai.description].filter(Boolean).join(' '));
+  if (adapter.limits) console.log('GPU limits: maxTextureDimension2D ' + adapter.limits.maxTextureDimension2D);
+} catch {}
 $('w').hidden = !!navigator.userAgentData; // only Chromium-based browsers have it
 const hasTS = adapter.features.has('timestamp-query');
 const device = await adapter.requestDevice({ requiredFeatures: hasTS ? ['timestamp-query'] : [] });
@@ -128,8 +144,8 @@ const pOctopus = scenePipe(mAnim, 'vsJelly', 'fsOctopus', [vbSolid, ibAnim]);
 const pKraken = scenePipe(mAnim, 'vsJelly', 'fsKraken', [vbSolid, ibAnim]);
 const pEel = scenePipe(mAnim, 'vsWorm', 'fsEel', [vbSolid, ibAnim]);
 const pSerpent = scenePipe(mAnim, 'vsWorm', 'fsSerpent', [vbSolid, ibAnim]);
-const pLure = scenePipe(mAnim, 'vsFish', 'fsLure', [vbSolid, ibAnim]); // v2.8: anglerfish (procedural)
-const pLongneck = scenePipe(mAnim, 'vsWorm', 'fsLongneck', [vbSolid, ibAnim]); // v2.8: plesiosaurus (procedural)
+const pLure = scenePipe(mAnim, 'vsFish', 'fsLure', [vbSolid, ibAnim]); // v2.9: anglerfish (procedural)
+const pLongneck = scenePipe(mAnim, 'vsWorm', 'fsLongneck', [vbSolid, ibAnim]); // v2.9: plesiosaurus (procedural)
 // player fish: its own module and layout (G uniform + player uniform), reusing the fish mesh
 const bglPlayer = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: {} }, { binding: 1, visibility: VF, buffer: {} }] });
 const plPlayer = device.createPipelineLayout({ bindGroupLayouts: [bglPlayer] });
@@ -323,7 +339,7 @@ meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().bui
 meshes.push(meshTower().build(), meshColumn().build(), meshDome().build(), meshGate().build(), meshCrystal().build(), meshStatue().build(), meshPlaza().build(), meshRune().build(), meshConduit().build(), meshArc().build());
 // Ocean City creatures (v2.0): ids 38-41 (turtle, shark, whale, mermaid)
 meshes.push(meshTurtle().build(), meshShark().build(), meshWhale().build(), meshMermaid().build());
-// Ocean City v2.8: ids 42-43 (anglerfish, plesiosaurus - procedural, rebuilt from the game's own helpers)
+// Ocean City v2.9: ids 42-43 (anglerfish, plesiosaurus - procedural, rebuilt from the game's own helpers)
 meshes.push(meshLure().build(), meshLongneck().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
@@ -383,7 +399,7 @@ let W = 0, H = 0, DW = 0, DH = 0, pix = +SV[1] || (LV > 1 ? 41e4 : mob ? 1280 * 
 let passScene, passRays, passBlur, bgBlur, passPost, bgRays, bgPost, bloomPass = [], bloomBG = [], targets = [];
 const NB = 6;
 function resize() {
-  DW = max(2, round(canvas.clientWidth * devicePixelRatio)); DH = max(2, round(canvas.clientHeight * devicePixelRatio));
+  DW = max(2, round(canvas.clientWidth * min(devicePixelRatio, DPRCAP))); DH = max(2, round(canvas.clientHeight * min(devicePixelRatio, DPRCAP)));
   const s = min(1, sqrt(pix / (DW * DH)));
   const w = max(2, round(DW * s) & ~1), h = max(2, round(DH * s) & ~1);
   if (w === W && h === H) return;
@@ -438,7 +454,14 @@ if (hasTS) {
 // ---------------------------------------------------------------- frame
 let hud = false, third = false, eye = false; // god mode only: the camera flies free, no fish; the 1-6 keys jump to viewpoints
 // (no V toggle: god mode is the only view; the 1-6 keys jump to viewpoints)
-let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
+let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
+// multi-touch (v2.9): one touch identifier per control, so two sticks and a hold button can run at once.
+// dragId = open-water canvas drag (the old single-finger steer); joyLId/joyRId = the two sticks.
+// touchIds is every live touch across canvas and sticks, and tN is its size. dragIds is only the live
+// open-water canvas touches: a second finger on open water is faster, but two sticks are not.
+let dragId = -1, joyLId = -1, joyRId = -1, joyLX = 0, joyLY = 0, joyRX = 0, joyRY = 0;
+const touchIds = new Set(), dragIds = new Set();
+const touchCount = () => { tN = touchIds.size; };
 const TANH = 0.6, NEAR = 0.1, EXPO = 0.74, RAYS = 0.70;
 const submitList = [null];
 const rowOrd = new Uint8Array(CELLS);
@@ -533,8 +556,8 @@ function render() {
   r.setPipeline(pKraken); r.setVertexBuffer(1, ibKraken); r.drawIndexed(JELLY.ib.length, nKraken, JELLY.i0, JELLY.v0, 0);
   r.setPipeline(pEel); r.setVertexBuffer(1, ibEel); r.drawIndexed(WORM.ib.length, nEel, WORM.i0, WORM.v0, 0);
   r.setPipeline(pSerpent); r.setVertexBuffer(1, ibSerpent); r.drawIndexed(WORM.ib.length, nSerpent, WORM.i0, WORM.v0, 0);
-  r.setPipeline(pLure); r.setVertexBuffer(1, ibLure); r.drawIndexed(LURE.ib.length, nLure, LURE.i0, LURE.v0, 0); // v2.8
-  r.setPipeline(pLongneck); r.setVertexBuffer(1, ibLongneck); r.drawIndexed(LONGNECK.ib.length, nLongneck, LONGNECK.i0, LONGNECK.v0, 0); // v2.8
+  r.setPipeline(pLure); r.setVertexBuffer(1, ibLure); r.drawIndexed(LURE.ib.length, nLure, LURE.i0, LURE.v0, 0); // v2.9
+  r.setPipeline(pLongneck); r.setVertexBuffer(1, ibLongneck); r.drawIndexed(LONGNECK.ib.length, nLongneck, LONGNECK.i0, LONGNECK.v0, 0); // v2.9
   // (no player fish in god mode: the camera is the player, nothing to draw here)
   r.setBindGroup(0, bg0); // put the scene group back for the kelp on down
   // kelp and plants: 9-row blades up close, 5 rows mid-range, a decimated set far away
@@ -721,8 +744,9 @@ function frame(now) {
   } else { autoT = autoN = autoSum = 0; }
   F[TIME] += dt;
   {
-    // touch: holding the finger away from where it went down keeps turning, like a joystick
-    if (tId >= 0) {
+    // touch hold-to-turn: a held offset keeps turning, whether it is the right stick or an open-water drag
+    if (joyRId >= 0) { lkx += joyRX * 1.5 * dt; lky += joyRY * dt; }
+    else if (dragId >= 0) {
       const tr = 4 / (innerWidth < innerHeight ? innerWidth : innerHeight); let jx = (tx - tx0) * tr, jy = (ty - ty0) * tr;
       jx = jx > 1 ? 1 : jx < -1 ? -1 : jx; jy = jy > 1 ? 1 : jy < -1 ? -1 : jy;
       lkx += jx * 1.5 * dt; lky += jy * dt;
@@ -730,7 +754,7 @@ function frame(now) {
     // mouse look through a single fast low-pass stage (was two cascaded stages at 30/s: too much lag, the view felt like it was dragging behind the mouse)
     const kq = 1 - exp(-dt * 60); lkx += mdx * 0.0022; lky += mdy * 0.0035; mdx = 0; mdy = 0; // the mouse pitches up/down harder than it yaws, so a flick up lifts the view
     const dyw = lkx * kq, dpt = lky * kq; lkx -= dyw; lky -= dpt;
-    const sp = ks || tN > 1 ? 26 : 7, k = 1 - exp(-dt * 12), mf = tId >= 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd; // velocity reaches its target fast (was 4.5/s, ~222 ms lag, the camera felt like it was swimming through syrup)
+    const sp = ks || dragIds.size > 1 ? 26 : 7, k = 1 - exp(-dt * 12), mf = dragId >= 0 && joyLId < 0 ? 0.7 : kf - kb, mr = kr - kl, mu = ku - kd; // velocity reaches its target fast (was 4.5/s, ~222 ms lag, the camera felt like it was swimming through syrup)
     // god mode: the camera flies free, 360 degrees, no fish. WASD moves where it looks, mouse steers,
     // Space/E rise, Q dives, Shift is faster; the rock-collision stepper keeps it out of rock
     const yaw = F[YAW] + dyw; let pitch = F[PIT] - dpt; pitch = pitch < -1.55 ? -1.55 : pitch > 1.55 ? 1.55 : pitch;
@@ -753,6 +777,11 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- input
+// jump to viewpoint i (keys 1-6 and the touch view buttons share this path) and light its button
+const setView = (i) => {
+  third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[i]);
+  document.querySelectorAll('#views button').forEach((b, j) => b.classList.toggle('on', j === i));
+};
 const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
@@ -761,7 +790,7 @@ const key = (e, v) => {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
       else if (e.code === 'Escape') ui(true);
-      else if (e.code >= 'Digit1' && e.code <= 'Digit6') { third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[e.code.charCodeAt(5) - 49]); }
+      else if (e.code >= 'Digit1' && e.code <= 'Digit6') { setView(e.code.charCodeAt(5) - 49); }
     }
   }
 };
@@ -773,7 +802,11 @@ addEventListener('keydown', (e) => {
   sound(); key(e, 1);
 });
 addEventListener('keyup', (e) => key(e, 0));
-const release = () => { kf = kb = kl = kr = ku = kd = ks = 0; tId = -1; tN = 0; };
+const release = () => {
+  kf = kb = kl = kr = ku = kd = ks = 0; dragId = joyLId = joyRId = -1; joyLX = joyLY = joyRX = joyRY = 0;
+  touchIds.clear(); dragIds.clear(); tN = 0;
+  const kL = $('knobL'), kR = $('knobR'); if (kL) kL.style.transform = ''; if (kR) kR.style.transform = '';
+};
 // Pointer lock, made to survive the browser's own behaviour: after Esc exits the lock Chrome refuses a fresh
 // request for about 1.25 s, so a failed request is retried after the cooldown instead of leaving the game in a
 // half-open state (menu hidden, mouse free). The menu only hides once the lock actually lands.
@@ -797,17 +830,91 @@ addEventListener('mousemove', (e) => {
 });
 addEventListener('blur', release);
 const touch = (e) => {
-  e.preventDefault(); sound(); tN = e.touches.length;
-  let f = null, first = false; for (let i = 0; i < tN; i++) if (e.touches[i].identifier === tId) f = e.touches[i];
-  if (!f) { tId = -1; if (tN) { f = e.touches[0]; tId = f.identifier; first = true; } }
-  if (f) {
-    // the touch axes turn with the page when it lies on its side
+  // open-water drags only: a touch starting on a stick or a button belongs to that control (separate DOM
+  // elements on top of the canvas), so it never reaches this handler and no two systems fight over mdx/mdy
+  e.preventDefault(); sound();
+  if (e.type === 'touchend' || e.type === 'touchcancel') {
+    for (const t of e.changedTouches) { touchIds.delete(t.identifier); dragIds.delete(t.identifier); if (t.identifier === dragId) dragId = -1; }
+    touchCount(); return;
+  }
+  for (const t of e.changedTouches) { touchIds.add(t.identifier); dragIds.add(t.identifier); }
+  touchCount();
+  if (e.type === 'touchstart') {
+    if (dragId < 0 && e.changedTouches.length) {
+      const f = e.changedTouches[0]; dragId = f.identifier;
+      // the touch axes turn with the page when it lies on its side
+      tx0 = tx = rot.matches ? f.clientY : f.clientX; ty0 = ty = rot.matches ? -f.clientX : f.clientY;
+    }
+    return;
+  }
+  if (dragId >= 0) for (const f of e.changedTouches) if (f.identifier === dragId) {
     const x = rot.matches ? f.clientY : f.clientX, y = rot.matches ? -f.clientX : f.clientY, s = 1100 / min(innerWidth, innerHeight);
-    if (first) { tx0 = x; ty0 = y; } else { mdx += (x - tx) * s; mdy += (y - ty) * s; } // the view follows the finger at once
+    mdx += (x - tx) * s; mdy += (y - ty) * s; // the view follows the finger at once
     tx = x; ty = y;
   }
 };
 for (const n of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) canvas.addEventListener(n, touch, { passive: false });
+
+// ---------------------------------------------------------------- touch controls (v2.9, touch-only: hidden on desktop by CSS, wired only on coarse pointers)
+if (mob) {
+  // stick vector in game axes, dead zone ~12% then rescaled to full range, clamped to the base circle.
+  // On the rotated portrait page the visual up is the client's right, so the client vector is rotated
+  // the same way the canvas drag maps it (x = clientY, y = -clientX).
+  const stickVec = (el, t) => {
+    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2;
+    let dx = (t.clientX - cx) / R, dy = (t.clientY - cy) / R;
+    if (rot.matches) { const gx = dy, gy = -dx; dx = gx; dy = gy; }
+    let m = sqrt(dx * dx + dy * dy);
+    if (m > 1) { dx /= m; dy /= m; m = 1; }
+    if (m < 0.12) return [0, 0];
+    const s = (m - 0.12) / (0.88 * m);
+    return [dx * s, dy * s];
+  };
+  const bindStick = (el, knob, left) => {
+    let id = -1, px = 0, py = 0;
+    const upd = (t, first) => {
+      const [nx, ny] = stickVec(el, t);
+      const dx = first ? 0 : nx - px, dy = first ? 0 : ny - py;
+      knob.style.transform = `translate(${nx * 34}px, ${ny * 34}px)`;
+      if (left) { joyLX = nx; joyLY = ny; kf = ny < 0 ? -ny : 0; kb = ny > 0 ? ny : 0; kl = nx < 0 ? -nx : 0; kr = nx > 0 ? nx : 0; }
+      else { joyRX = nx; joyRY = ny; mdx += dx * 260; mdy += dy * 260; } // drag steers at once; frame() keeps turning while held
+      px = nx; py = ny;
+    };
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault(); sound(); if (id >= 0) return;
+      const t = e.changedTouches[0]; id = t.identifier;
+      if (left) joyLId = id; else joyRId = id;
+      touchIds.add(id); touchCount(); upd(t, true);
+    }, { passive: false });
+    el.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) if (t.identifier === id) upd(t, false);
+    }, { passive: false });
+    const end = (e) => {
+      for (const t of e.changedTouches) if (t.identifier === id) {
+        touchIds.delete(id); touchCount(); id = -1; knob.style.transform = '';
+        if (left) { joyLId = -1; joyLX = joyLY = 0; kf = kb = kl = kr = 0; }
+        else { joyRId = -1; joyRX = joyRY = 0; }
+      }
+    };
+    el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+  };
+  bindStick($('joyL'), $('knobL'), true);
+  bindStick($('joyR'), $('knobR'), false);
+  // hold buttons: pointerdown/up/leave/cancel, pointer capture so the hold survives sliding off the button
+  const holdBtn = (el, set) => {
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); sound(); el.classList.add('on'); try { el.setPointerCapture(e.pointerId); } catch {} set(1); });
+    const off = () => { el.classList.remove('on'); set(0); };
+    el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off); el.addEventListener('lostpointercapture', off);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  };
+  holdBtn($('btnUp'), (v) => ku = v);
+  holdBtn($('btnDown'), (v) => kd = v);
+  holdBtn($('btnBoost'), (v) => ks = v);
+  // view buttons 1-6: same path as the Digit keys, and the current view stays lit
+  document.querySelectorAll('#views button').forEach((b) => b.addEventListener('click', () => { sound(); setView(+b.dataset.v); }));
+  const vw0 = document.querySelector('#views button'); if (vw0) vw0.classList.add('on');
+}
 
 // ---------------------------------------------------------------- menu
 // The scene keeps rendering (blurred by CSS) behind the menu. Esc, losing the mouse or the corner button open it.
@@ -866,5 +973,6 @@ if (savedPos) {
 await say('Letting the light in…', 1, 400);
 render(); await Q.onSubmittedWorkDone();
 setTimeout(keep, 15e3, 'abyssalLoad', ''); // the load counts as survived after 15 s of frames
+revealed = true;
 showIntro();
 requestAnimationFrame((t) => { F[LAST] = t; requestAnimationFrame(frame); });

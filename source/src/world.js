@@ -478,8 +478,8 @@ function makeWorld(D, T, flyPts, POSES) {
   serpent.push(-80, -32, -60, 50, 0.7, 0.02, 4, 0.1); // the sea serpent: enormous
   serpent.push(-120, -32, -120, 40, 0.7, 0.02, 5, 0.5); // v2.7: a second serpent guarding the Abyssal District
   serpent.push(100, -30, 120, 40, 0.7, 0.02, 4, 0.7); // v2.7: a third serpent in the far southeast
-  // v2.8: the two giant monster types are procedural again (the converted GLB models were removed in
-  // v2.8: they rendered as flat unlit triangles) - anglerfish (vsFish) and plesiosaurus, a long-necked
+  // v2.9: the two giant monster types are procedural again (the converted GLB models were removed in
+  // v2.9: they rendered as flat unlit triangles) - anglerfish (vsFish) and plesiosaurus, a long-necked
   // sea serpent (vsWorm). Meshes are meshLure (id 42) and meshLongneck (id 43), built from bodyRings/tube/fin.
   lure.push(-120, -38, -100, 20, 0.3, 0.05, 4, 0.2, -150, -40, -60, 25, 0.6, 0.05, 4.5, 0.7, 100, -35, 140, 20, 0.8, 0.05, 4, 0.4);
   longneck.push(-100, -35, -130, 50, 0.5, 0.02, 2, 0.1, 80, -30, 130, 45, 0.7, 0.02, 2, 0.6);
@@ -815,10 +815,10 @@ function meshMermaid() {
   return m;
 }
 
-// ---------------------------------------------------------------- Ocean City v2.8: procedural monsters
+// ---------------------------------------------------------------- Ocean City v2.9: procedural monsters
 // v2.7 embedded two converted GLB models here; they rendered as flat unlit triangles (the conversion
 // kept raw positions with inconsistent winding, so Mesh.build produced broken normals) and looked
-// embarrassing next to the game's own creatures. v2.8 rebuilds both monsters from the game's own
+// embarrassing next to the game's own creatures. v2.9 rebuilds both monsters from the game's own
 // helpers (bodyRings, tube, fin, meshLathe), so they share the same normals, lighting and bright-aqua
 // style as the shark, whale and serpent. Both face +x (head at +x) for vsFish / vsWorm.
 // a merge helper: append another mesh's vertices (offset by dx,dy,dz), indices and aux into this one
