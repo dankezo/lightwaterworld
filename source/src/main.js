@@ -455,7 +455,7 @@ if (hasTS) {
 let hud = false, third = false, eye = false; // god mode only: the camera flies free, no fish; the 1-6 keys jump to viewpoints
 // (no V toggle: god mode is the only view; the 1-6 keys jump to viewpoints)
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
-// multi-touch (v2.9): one touch identifier per control, so two sticks and a hold button can run at once.
+// multi-touch (v2.9): one touch identifier per control, so two sticks can run at once.
 // dragId = open-water canvas drag (the old single-finger steer); joyLId/joyRId = the two sticks.
 // touchIds is every live touch across canvas and sticks, and tN is its size. dragIds is only the live
 // open-water canvas touches: a second finger on open water is faster, but two sticks are not.
@@ -777,10 +777,12 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- input
-// jump to viewpoint i (keys 1-6 and the touch view buttons share this path) and light its button
+// jump to viewpoint i (keys 1-6 and the single touch View button share this path); the touch
+// button shows which view is current (v2.9.1: one button cycles 1-6, the 6-button row is gone)
+let viewI = 0;
 const setView = (i) => {
-  third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[i]);
-  document.querySelectorAll('#views button').forEach((b, j) => b.classList.toggle('on', j === i));
+  viewI = i; third = false; eye = false; F[VX] = F[VY] = F[VZ] = 0; lookAt(...POSES[i]);
+  const vb = $('viewBtn'); if (vb) vb.textContent = `View ${i + 1}/6`;
 };
 const key = (e, v) => {
   switch (e.code) {
@@ -901,19 +903,11 @@ if (mob) {
   };
   bindStick($('joyL'), $('knobL'), true);
   bindStick($('joyR'), $('knobR'), false);
-  // hold buttons: pointerdown/up/leave/cancel, pointer capture so the hold survives sliding off the button
-  const holdBtn = (el, set) => {
-    el.addEventListener('pointerdown', (e) => { e.preventDefault(); sound(); el.classList.add('on'); try { el.setPointerCapture(e.pointerId); } catch {} set(1); });
-    const off = () => { el.classList.remove('on'); set(0); };
-    el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off); el.addEventListener('lostpointercapture', off);
-    el.addEventListener('contextmenu', (e) => e.preventDefault());
-  };
-  holdBtn($('btnUp'), (v) => ku = v);
-  holdBtn($('btnDown'), (v) => kd = v);
-  holdBtn($('btnBoost'), (v) => ks = v);
-  // view buttons 1-6: same path as the Digit keys, and the current view stays lit
-  document.querySelectorAll('#views button').forEach((b) => b.addEventListener('click', () => { sound(); setView(+b.dataset.v); }));
-  const vw0 = document.querySelector('#views button'); if (vw0) vw0.classList.add('on');
+  // one View button (v2.9.1): each tap jumps to the next viewpoint, same path as the Digit keys.
+  // Rise/Dive/Boost hold buttons are gone on touch: rise and dive by pitching the view up or down
+  // with the right stick and flying forward with the left stick.
+  const vb = $('viewBtn');
+  if (vb) vb.addEventListener('click', () => { sound(); setView((viewI + 1) % 6); });
 }
 
 // ---------------------------------------------------------------- menu
